@@ -1,0 +1,146 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
+  <defs>
+    <!-- Denim Background Gradient -->
+    <radialGradient id="denimBg" cx="50%" cy="45%" r="55%">
+      <stop offset="0%" stop-color="#1a2f4c" />
+      <stop offset="65%" stop-color="#0f1d32" />
+      <stop offset="100%" stop-color="#091220" />
+    </radialGradient>
+
+    <!-- Gold Stitch / Text Gradient -->
+    <linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f3d078" />
+      <stop offset="40%" stop-color="#c99e46" />
+      <stop offset="70%" stop-color="#e8c365" />
+      <stop offset="100%" stop-color="#a67c2e" />
+    </linearGradient>
+
+    <!-- White / Silver Thread Gradient -->
+    <linearGradient id="silverGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#d1d5db" />
+    </linearGradient>
+
+    <!-- 3D Drop Shadow for Lettering -->
+    <filter id="badgeShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.6" />
+    </filter>
+    <filter id="textGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000000" flood-opacity="0.8" />
+    </filter>
+
+    <!-- Denim Twill Pattern -->
+    <pattern id="denimWeave" width="6" height="6" patternUnits="userSpaceOnUse">
+      <path d="M0,6 L6,0 M3,6 L6,3 M0,3 L3,0" stroke="#16273f" stroke-width="1.2" stroke-opacity="0.4" />
+      <path d="M0,0 L6,6 M0,3 L3,6 M3,0 L6,3" stroke="#253e63" stroke-width="0.8" stroke-opacity="0.25" />
+    </pattern>
+
+    <!-- Arc Path for Bottom Text -->
+    <path id="bottomTextArc" d="M 95,295 A 185,185 0 0,0 405,295" fill="none" />
+  </defs>
+
+  <!-- Base Circle Background -->
+  <circle cx="250" cy="250" r="240" fill="#091220" />
+  <circle cx="250" cy="250" r="236" fill="url(#denimBg)" />
+  <circle cx="250" cy="250" r="236" fill="url(#denimWeave)" />
+
+  <!-- Outer Silver Border with Stitching -->
+  <circle cx="250" cy="250" r="235" fill="none" stroke="#e2e8f0" stroke-width="3" stroke-opacity="0.85" />
+  <circle cx="250" cy="250" r="227" fill="none" stroke="#f1f5f9" stroke-width="2.2" stroke-dasharray="5,4" stroke-opacity="0.9" />
+
+  <!-- Inner Copper / Gold Stitching Line -->
+  <circle cx="250" cy="250" r="218" fill="none" stroke="url(#goldGradient)" stroke-width="2" stroke-dasharray="6,4" />
+
+  <!-- Inner Subtle Guide Ring -->
+  <circle cx="250" cy="250" r="195" fill="none" stroke="#1e3a5f" stroke-width="1" stroke-opacity="0.4" />
+
+  <!-- ================= TOP MONOGRAM (DV) ================= -->
+  <g filter="url(#textGlow)">
+    <!-- Letter "D" (Serif White/Silver) -->
+    <path d="M 185,85 L 240,85 C 275,85 292,105 292,132 C 292,158 275,178 240,178 L 185,178 Z M 208,103 L 208,160 L 235,160 C 258,160 268,148 268,132 C 268,115 258,103 235,103 Z"
+          fill="url(#silverGradient)" stroke="#0f172a" stroke-width="1.5" />
+    
+    <!-- Decorative Serifs for D -->
+    <rect x="175" y="83" width="20" height="5" rx="1" fill="url(#silverGradient)" />
+    <rect x="175" y="175" width="20" height="5" rx="1" fill="url(#silverGradient)" />
+
+    <!-- Letter "V" Interlocking (Denim Texture + Gold Stitched Border) -->
+    <path d="M 220,118 L 268,198 L 278,198 L 324,118 L 302,118 L 273,172 L 244,118 Z"
+          fill="#13233a" stroke="url(#goldGradient)" stroke-width="3" />
+    <path d="M 223,120 L 269,195 L 277,195 L 321,120"
+          fill="none" stroke="url(#goldGradient)" stroke-width="1.2" stroke-dasharray="3,2" />
+  </g>
+
+  <!-- EST. 2024 -->
+  <g filter="url(#textGlow)">
+    <text x="135" y="148" font-family="'Georgia', serif" font-size="14" font-weight="700" fill="url(#silverGradient)" letter-spacing="3" text-anchor="middle">EST.</text>
+    <line x1="108" y1="156" x2="162" y2="156" stroke="url(#goldGradient)" stroke-width="1.5" />
+
+    <text x="365" y="148" font-family="'Georgia', serif" font-size="14" font-weight="700" fill="url(#silverGradient)" letter-spacing="3" text-anchor="middle">2024</text>
+    <line x1="338" y1="156" x2="392" y2="156" stroke="url(#goldGradient)" stroke-width="1.5" />
+  </g>
+
+  <!-- ================= MAIN BRAND "DENIM" ================= -->
+  <g filter="url(#badgeShadow)">
+    <text x="250" y="278"
+          font-family="'Times New Roman', 'Georgia', serif"
+          font-size="78"
+          font-weight="900"
+          letter-spacing="8"
+          fill="url(#silverGradient)"
+          stroke="#0b1320"
+          stroke-width="2"
+          text-anchor="middle">DENIM</text>
+  </g>
+
+  <!-- ================= SUBTITLE "— VAULT —" ================= -->
+  <g filter="url(#textGlow)">
+    <text x="250" y="324"
+          font-family="'Georgia', serif"
+          font-size="34"
+          font-weight="800"
+          letter-spacing="10"
+          fill="url(#goldGradient)"
+          text-anchor="middle">— VAULT —</text>
+  </g>
+
+  <!-- ================= "— BD —" ================= -->
+  <g filter="url(#textGlow)">
+    <text x="250" y="362"
+          font-family="'Georgia', serif"
+          font-size="26"
+          font-weight="800"
+          letter-spacing="8"
+          fill="url(#silverGradient)"
+          text-anchor="middle">— BD —</text>
+  </g>
+
+  <!-- Left & Right Stars -->
+  <g fill="url(#goldGradient)" filter="url(#textGlow)">
+    <!-- Left Star -->
+    <path d="M 112,342 L 115,350 L 124,350 L 117,355 L 120,364 L 112,359 L 104,364 L 107,355 L 100,350 L 109,350 Z" />
+    <!-- Right Star -->
+    <path d="M 388,342 L 391,350 L 400,350 L 393,355 L 396,364 L 388,359 L 380,364 L 383,355 L 376,350 L 385,350 Z" />
+  </g>
+
+  <!-- ================= DENIM POCKET MOTIF ================= -->
+  <g transform="translate(225, 372)" filter="url(#textGlow)">
+    <!-- Pocket Outline -->
+    <path d="M 0,0 L 50,0 L 50,26 L 25,44 L 0,26 Z"
+          fill="#112239" stroke="url(#goldGradient)" stroke-width="2" />
+    <!-- Pocket Hem Stitching -->
+    <line x1="3" y1="5" x2="47" y2="5" stroke="url(#goldGradient)" stroke-width="1.2" stroke-dasharray="3,2" />
+    <!-- Classic Denim Curved Arcuates -->
+    <path d="M 5,14 Q 16,25 25,18 Q 34,25 45,14" fill="none" stroke="url(#goldGradient)" stroke-width="1.5" />
+    <path d="M 25,18 L 25,24" stroke="url(#goldGradient)" stroke-width="1.2" />
+  </g>
+
+  <!-- ================= CURVED BOTTOM MOTTO ================= -->
+  <g filter="url(#textGlow)">
+    <text font-family="'Georgia', serif" font-size="12" font-weight="700" fill="url(#silverGradient)" letter-spacing="4.5">
+      <textPath href="#bottomTextArc" startOffset="50%" text-anchor="middle">
+        PREMIUM DENIM, DIRECT TO YOU
+      </textPath>
+    </text>
+  </g>
+</svg>
