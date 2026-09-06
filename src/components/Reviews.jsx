@@ -334,7 +334,7 @@ export default function Reviews({ lang = 'bn' }) {
       {/* Review Submission Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-fade-in">
-          <div className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl border border-slate-100 p-6 md:p-8 animate-soft-pulse">
+          <div className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl border border-slate-100 p-6 md:p-8">
             {/* Close Button */}
             <button
               onClick={() => setIsModalOpen(false)}

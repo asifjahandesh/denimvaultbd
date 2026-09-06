@@ -4,10 +4,11 @@ import AdminLogin from './AdminLogin'
 import Analytics from './Analytics'
 import OrderManager from './OrderManager'
 import ProductManager from './ProductManager'
+import InventoryManager from './InventoryManager'
 import SettingsManager from './SettingsManager'
 import ReviewManager from './ReviewManager'
 import Logo from '../../components/Logo'
-import { BarChart3, ShoppingCart, Package, Settings, LogOut, Menu, X, ShieldAlert, MessageSquare } from 'lucide-react'
+import { BarChart3, ShoppingCart, Package, Boxes, Settings, LogOut, Menu, X, ShieldAlert, MessageSquare } from 'lucide-react'
 
 export default function AdminDashboard() {
   // Authentication is kept purely in-memory (React state).
@@ -67,7 +68,7 @@ export default function AdminDashboard() {
   }
 
   const handleLogout = () => {
-    if (!window.confirm('আপনি কি লগআউট করতে চান?')) return
+    if (!window.confirm('Are you sure you want to log out?')) return
     setIsAuthenticated(false)
   }
 
@@ -78,11 +79,12 @@ export default function AdminDashboard() {
 
   // Sidebar/Navbar Tabs definition
   const navigationItems = [
-    { id: 'analytics', label: 'অ্যানালিটিক্স', icon: <BarChart3 size={18} /> },
-    { id: 'orders', label: 'অর্ডার সমূহ', icon: <ShoppingCart size={18} /> },
-    { id: 'products', label: 'প্রোডাক্টস', icon: <Package size={18} /> },
-    { id: 'reviews', label: 'রিভিউ সমূহ', icon: <MessageSquare size={18} /> },
-    { id: 'settings', label: 'সেটিংস', icon: <Settings size={18} /> },
+    { id: 'analytics', label: 'Analytics', icon: <BarChart3 size={18} /> },
+    { id: 'orders', label: 'Orders', icon: <ShoppingCart size={18} /> },
+    { id: 'products', label: 'Products', icon: <Package size={18} /> },
+    { id: 'inventory', label: 'Inventory', icon: <Boxes size={18} /> },
+    { id: 'reviews', label: 'Reviews', icon: <MessageSquare size={18} /> },
+    { id: 'settings', label: 'Settings', icon: <Settings size={18} /> },
   ]
 
   return (
@@ -116,7 +118,7 @@ export default function AdminDashboard() {
             class="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-xs font-bold text-rose-600 hover:bg-rose-50 transition-all mt-8"
           >
             <LogOut size={18} />
-            লগআউট করুন
+            Logout
           </button>
         </nav>
       </aside>
@@ -133,25 +135,25 @@ export default function AdminDashboard() {
             >
               {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
-            <span class="font-extrabold text-slate-900 text-sm">অ্যাডমিন প্যানেল</span>
+            <span class="font-extrabold text-slate-900 text-sm">Admin Panel</span>
           </div>
 
           <div class="hidden lg:block">
             {dataLoading && (
-              <span class="text-[11px] font-bold text-rose-500 animate-pulse">
-                ডাটা রিফ্রেশ হচ্ছে...
+              <span class="text-[11px] font-bold text-rose-500">
+                Refreshing data...
               </span>
             )}
           </div>
 
           <div class="flex items-center gap-4">
             <span class="text-xs font-bold text-slate-800">
-              অ্যাডমিন মোড (সক্রিয়)
+              Admin Mode (Active)
             </span>
             <button
               onClick={handleLogout}
               class="rounded-xl border border-slate-100 p-2 text-slate-500 hover:bg-slate-50 hover:text-rose-600 lg:hidden"
-              title="লগআউট"
+              title="Logout"
             >
               <LogOut size={16} />
             </button>
@@ -162,10 +164,10 @@ export default function AdminDashboard() {
         {mobileMenuOpen && (
           <div class="fixed inset-0 z-30 flex lg:hidden">
             <div class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)}></div>
-            <nav class="relative flex w-64 flex-col bg-white p-4 shadow-2xl animate-soft-pulse">
+            <nav class="relative flex w-64 flex-col bg-white p-4 shadow-2xl">
               <div class="flex h-12 items-center gap-2 border-b border-slate-50 mb-4 px-2">
                 <ShieldAlert size={16} className="text-rose-500" />
-                <span class="font-bold text-slate-800 text-sm">ড্যাশবোর্ড মেনু</span>
+                <span class="font-bold text-slate-800 text-sm">Dashboard Menu</span>
               </div>
               <div class="space-y-1">
                 {navigationItems.map((item) => (
@@ -190,7 +192,7 @@ export default function AdminDashboard() {
                   class="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-xs font-bold text-rose-600 hover:bg-rose-50 transition-all mt-6"
                 >
                   <LogOut size={18} />
-                  লগআউট
+                  Logout
                 </button>
               </div>
             </nav>
@@ -207,6 +209,9 @@ export default function AdminDashboard() {
           )}
           {activeTab === 'products' && (
             <ProductManager products={products} onProductUpdate={fetchDashboardData} />
+          )}
+          {activeTab === 'inventory' && (
+            <InventoryManager products={products} orders={orders} onProductUpdate={fetchDashboardData} />
           )}
           {activeTab === 'reviews' && (
             <ReviewManager onReviewsUpdate={fetchDashboardData} />

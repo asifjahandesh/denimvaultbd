@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react'
 import { Filter, Grid, Search } from 'lucide-react'
 import { translations } from '../utils/translations'
 import ProductCard from './ProductCard'
-import { ITEM_CATEGORIES, parseProductSizes } from '../utils/productSizes'
+import { ITEM_CATEGORIES, parseProductSizes, stripHtml } from '../utils/productSizes'
 
 export default function ProductList({ products, loading, lang = 'bn', onOrderClick }) {
   const [searchQuery, setSearchQuery] = useState('')
@@ -30,7 +30,7 @@ export default function ProductList({ products, loading, lang = 'bn', onOrderCli
 
       const matchesSearch =
         product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        cleanDescription.toLowerCase().includes(searchQuery.toLowerCase())
+        stripHtml(cleanDescription).toLowerCase().includes(searchQuery.toLowerCase())
       
       const matchesCategory =
         selectedCategory === 'all' || itemCategory === selectedCategory

@@ -11,7 +11,8 @@ import {
   ITEM_CATEGORIES,
   getCategorySizes,
   parseProductSizes,
-  encodeProductDescription
+  encodeProductDescription,
+  formatRichText
 } from '../utils/productSizes'
 import {
   getAllDistricts,
@@ -168,7 +169,7 @@ export default function ProductDetails({ lang = 'bn', setLang }) {
   }
 
   // Sizing & Category breakdown
-  const { cleanDescription, sizeStock, category: itemCategory, allSizes, availableSizes, isFreeDelivery } = parseProductSizes(product)
+  const { cleanDescription, sizeStock, category: itemCategory, allSizes, availableSizes, isFreeDelivery, entryStock } = parseProductSizes(product)
 
   // Price & Stock logic
   const hasDiscount = product.discount_price && product.discount_price < product.price
@@ -326,7 +327,7 @@ ${confirmPrompt}`
       if (selectedSize && updatedSizeStock[selectedSize] !== undefined) {
         updatedSizeStock[selectedSize] = Math.max(0, updatedSizeStock[selectedSize] - quantity)
       }
-      const updatedDescription = encodeProductDescription(cleanDescription, updatedSizeStock, isFreeDelivery)
+      const updatedDescription = encodeProductDescription(cleanDescription, updatedSizeStock, isFreeDelivery, entryStock)
       const newTotalStock = Math.max(0, product.stock - quantity)
 
       const { error: stockError } = await supabase
@@ -608,9 +609,26 @@ ${confirmPrompt}`
               )}
 
               {/* Description */}
-              <div class="border-t border-slate-50 pt-4">
-                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{t.descriptionLabel}</h4>
-                <p class="text-xs text-slate-600 md:text-sm leading-relaxed whitespace-pre-line">{cleanDescription || t.noDescription}</p>
+              <div className="border-t border-slate-50 pt-4">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{t.descriptionLabel}</h4>
+                {cleanDescription ? (
+                  <div
+                    className="text-xs sm:text-sm text-slate-600 leading-relaxed space-y-2 prose prose-slate max-w-none 
+                      [&_font[size='2']]:text-xs 
+                      [&_font[size='3']]:text-sm 
+                      [&_font[size='4']]:text-base 
+                      [&_font[size='5']]:text-lg [&_font[size='5']]:font-bold 
+                      [&_font[size='6']]:text-xl [&_font[size='6']]:font-black
+                      [&_b]:font-bold [&_strong]:font-bold 
+                      [&_i]:italic [&_em]:italic 
+                      [&_u]:underline 
+                      [&_ul]:list-disc [&_ul]:ml-4 
+                      [&_ol]:list-decimal [&_ol]:ml-4"
+                    dangerouslySetInnerHTML={{ __html: formatRichText(cleanDescription) }}
+                  />
+                ) : (
+                  <p className="text-xs text-slate-500 md:text-sm leading-relaxed">{t.noDescription}</p>
+                )}
               </div>
             </div>
 
@@ -965,7 +983,7 @@ ${confirmPrompt}`
                 </form>
               ) : (
                 /* Success Order screen */
-                <div class="py-6 text-center space-y-5 animate-soft-pulse">
+                <div class="py-6 text-center space-y-5">
                   <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
                     <Check size={32} className="stroke-[3]" />
                   </div>

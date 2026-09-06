@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import { supabase } from '../../supabase'
-import { Search, Filter, Phone, MapPin, Calendar, Clock, ShoppingCart, User, AlertCircle } from 'lucide-react'
+import { Search, Filter, Phone, MapPin, Calendar, Clock, ShoppingCart, User, AlertCircle, Trash2 } from 'lucide-react'
 
 export default function OrderManager({ orders, onOrderUpdate }) {
   const [searchQuery, setSearchQuery] = useState('')
@@ -40,7 +40,30 @@ export default function OrderManager({ orders, onOrderUpdate }) {
       }
     } catch (err) {
       console.error('Error updating status:', err)
-      alert('স্ট্যাটাস আপডেট করতে সমস্যা হয়েছে।')
+      alert('Failed to update order status.')
+    }
+  }
+
+  // Delete order permanently from Supabase
+  const handleDeleteOrder = async (orderId, e) => {
+    if (e) e.stopPropagation()
+    if (!window.confirm('Are you sure you want to permanently delete this order? This action cannot be undone.')) return
+
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', orderId)
+
+      if (error) throw error
+
+      if (selectedOrder && selectedOrder.id === orderId) {
+        setSelectedOrder(null)
+      }
+      onOrderUpdate()
+    } catch (err) {
+      console.error('Error deleting order:', err)
+      alert('Failed to delete order. Please check database connection.')
     }
   }
 
@@ -72,8 +95,8 @@ export default function OrderManager({ orders, onOrderUpdate }) {
     <div class="space-y-6">
       {/* Header */}
       <div>
-        <h2 class="text-xl font-bold text-slate-800">অর্ডার ব্যবস্থাপনা (Orders)</h2>
-        <p class="text-xs text-slate-500">আপনার স্টোরের সকল গ্রাহকের অর্ডার বিবরণ পরিচালনা করুন।</p>
+        <h2 class="text-xl font-bold text-slate-800">Order Management (Orders)</h2>
+        <p class="text-xs text-slate-500">Manage customer orders, update statuses, track delivery and records.</p>
       </div>
 
       {/* Filter and Search Bar */}
@@ -83,7 +106,7 @@ export default function OrderManager({ orders, onOrderUpdate }) {
           <Search className="absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="নাম, মোবাইল নাম্বার বা প্রডাক্ট দিয়ে খুঁজুন..."
+            placeholder="Search by customer name, phone or product..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             class="w-full rounded-2xl border border-slate-100 bg-slate-50 py-2.5 pl-11 pr-4 text-xs outline-none transition-all focus:border-rose-400 focus:bg-white"
@@ -94,23 +117,26 @@ export default function OrderManager({ orders, onOrderUpdate }) {
         <div class="flex gap-2 items-center overflow-x-auto pb-1 md:pb-0">
           <div class="flex items-center gap-1.5 text-xs text-slate-400 font-bold flex-shrink-0">
             <Filter size={12} />
-            <span>ফিল্টার:</span>
+            <span>Filter:</span>
           </div>
-          {['all', 'pending', 'confirmed', 'processing', 'delivered', 'cancelled'].map((status) => (
+          {[
+            { id: 'all', label: 'All Orders' },
+            { id: 'pending', label: 'Pending' },
+            { id: 'confirmed', label: 'Confirmed' },
+            { id: 'processing', label: 'Processing' },
+            { id: 'delivered', label: 'Delivered' },
+            { id: 'cancelled', label: 'Cancelled' }
+          ].map(({ id, label }) => (
             <button
-              key={status}
-              onClick={() => setStatusFilter(status)}
+              key={id}
+              onClick={() => setStatusFilter(id)}
               class={`rounded-xl px-3.5 py-2 text-xs font-bold transition-all whitespace-nowrap ${
-                statusFilter === status
+                statusFilter === id
                   ? 'bg-rose-500 text-white shadow-md shadow-rose-100'
                   : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
               }`}
             >
-              {status === 'all' ? 'সব অর্ডার' :
-               status === 'pending' ? 'পেন্ডিং' :
-               status === 'confirmed' ? 'কনফার্মড' :
-               status === 'processing' ? 'প্রসেসিং' :
-               status === 'delivered' ? 'ডেলিভার্ড' : 'বাতিল'}
+              {label}
             </button>
           ))}
         </div>
@@ -125,11 +151,11 @@ export default function OrderManager({ orders, onOrderUpdate }) {
               <table class="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr class="text-slate-400 font-bold border-b border-slate-50">
-                    <th class="py-3 pr-4">গ্রাহক ও তারিখ</th>
-                    <th class="py-3 pr-4">পণ্য ও পরিমাণ</th>
-                    <th class="py-3 pr-4">মোট বিল</th>
-                    <th class="py-3 pr-4">স্ট্যাটাস</th>
-                    <th class="py-3 pr-4 text-right">অ্যাকশন</th>
+                    <th class="py-3 pr-4">Customer & Date</th>
+                    <th class="py-3 pr-4">Product & Qty</th>
+                    <th class="py-3 pr-4">Total Amount</th>
+                    <th class="py-3 pr-4">Status</th>
+                    <th class="py-3 pr-4 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-50">
@@ -145,13 +171,17 @@ export default function OrderManager({ orders, onOrderUpdate }) {
                         <p class="font-bold text-slate-800">{order.customer_name}</p>
                         <p class="text-[10px] text-slate-400">{order.phone}</p>
                         <p class="text-[9px] text-slate-400 mt-0.5">
-                          {new Date(order.created_at).toLocaleDateString('bn-BD')}
+                          {new Date(order.created_at).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          })}
                         </p>
                       </td>
                       <td class="py-3.5 pr-4">
                         <p class="font-bold text-slate-800">{order.product_name}</p>
                         <p class="text-[10px] text-slate-500">
-                          {order.product_variant ? `ভেরিয়েন্ট: ${order.product_variant} | ` : ''} পরিমাণ: {order.quantity} টি
+                          {order.product_variant ? `Variant: ${order.product_variant} | ` : ''} Qty: {order.quantity}
                         </p>
                       </td>
                       <td class="py-3.5 pr-4 font-extrabold text-slate-800">
@@ -165,24 +195,34 @@ export default function OrderManager({ orders, onOrderUpdate }) {
                           order.status === 'delivered' ? 'bg-emerald-50 text-emerald-600' :
                           'bg-rose-50 text-rose-600'
                         }`}>
-                          {order.status === 'pending' ? 'পেন্ডিং' :
-                           order.status === 'confirmed' ? 'কনফার্মড' :
-                           order.status === 'processing' ? 'প্রসেসিং' :
-                           order.status === 'delivered' ? 'ডেলিভার্ড' : 'বাতিল'}
+                          {order.status === 'pending' ? 'Pending' :
+                           order.status === 'confirmed' ? 'Confirmed' :
+                           order.status === 'processing' ? 'Processing' :
+                           order.status === 'delivered' ? 'Delivered' : 'Cancelled'}
                         </span>
                       </td>
                       <td class="py-3.5 pr-4 text-right" onClick={(e) => e.stopPropagation()}>
-                        <select
-                          value={order.status}
-                          onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                          class="rounded-xl border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-600 outline-none hover:border-slate-300"
-                        >
-                          <option value="pending">পেন্ডিং</option>
-                          <option value="confirmed">কনফার্মড</option>
-                          <option value="processing">প্রসেসিং</option>
-                          <option value="delivered">ডেলিভার্ড</option>
-                          <option value="cancelled">বাতিল</option>
-                        </select>
+                        <div class="flex items-center justify-end gap-1.5">
+                          <select
+                            value={order.status}
+                            onChange={(e) => handleStatusChange(order.id, e.target.value)}
+                            class="rounded-xl border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-600 outline-none hover:border-slate-300"
+                          >
+                            <option value="pending">Pending</option>
+                            <option value="confirmed">Confirmed</option>
+                            <option value="processing">Processing</option>
+                            <option value="delivered">Delivered</option>
+                            <option value="cancelled">Cancelled</option>
+                          </select>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteOrder(order.id, e)}
+                            class="rounded-xl border border-slate-200 p-1.5 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                            title="Delete Order"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -191,7 +231,7 @@ export default function OrderManager({ orders, onOrderUpdate }) {
             </div>
           ) : (
             <div class="py-12 text-center text-xs text-slate-400">
-              কোন অর্ডার খুঁজে পাওয়া যায়নি।
+              No orders found.
             </div>
           )}
         </div>
@@ -203,29 +243,29 @@ export default function OrderManager({ orders, onOrderUpdate }) {
               <div class="flex items-center justify-between border-b border-slate-50 pb-3">
                 <h3 class="text-sm font-bold text-slate-800 flex items-center gap-1">
                   <Clock size={14} className="text-rose-500" />
-                  অর্ডার বিস্তারিত
+                  Order Details
                 </h3>
                 <button
                   onClick={() => setSelectedOrder(null)}
                   class="text-xs text-slate-400 hover:text-slate-600"
                 >
-                  বন্ধ করুন
+                  Close
                 </button>
               </div>
 
               {/* Status Selector */}
               <div class="flex items-center justify-between rounded-2xl bg-slate-50 p-3">
-                <span class="text-xs font-bold text-slate-500">বর্তমান স্ট্যাটাস:</span>
+                <span class="text-xs font-bold text-slate-500">Current Status:</span>
                 <select
                   value={selectedOrder.status}
                   onChange={(e) => handleStatusChange(selectedOrder.id, e.target.value)}
                   class="rounded-xl border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-700 outline-none"
                 >
-                  <option value="pending">পেন্ডিং</option>
-                  <option value="confirmed">কনফার্মড</option>
-                  <option value="processing">প্রসেসিং</option>
-                  <option value="delivered">ডেলিভার্ড</option>
-                  <option value="cancelled">বাতিল</option>
+                  <option value="pending">Pending</option>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="processing">Processing</option>
+                  <option value="delivered">Delivered</option>
+                  <option value="cancelled">Cancelled</option>
                 </select>
               </div>
 
@@ -235,7 +275,7 @@ export default function OrderManager({ orders, onOrderUpdate }) {
                   <User size={14} className="text-slate-400 mt-0.5" />
                   <div>
                     <p class="font-bold text-slate-800">{selectedOrder.customer_name}</p>
-                    <p class="text-[10px] text-slate-400">গ্রাহকের নাম</p>
+                    <p class="text-[10px] text-slate-400">Customer Name</p>
                   </div>
                 </div>
 
@@ -245,7 +285,7 @@ export default function OrderManager({ orders, onOrderUpdate }) {
                     <a href={`tel:${selectedOrder.phone}`} class="font-bold text-rose-500 hover:underline">
                       {selectedOrder.phone}
                     </a>
-                    <p class="text-[10px] text-slate-400">মোবাইল নাম্বার</p>
+                    <p class="text-[10px] text-slate-400">Phone Number</p>
                   </div>
                 </div>
 
@@ -253,7 +293,7 @@ export default function OrderManager({ orders, onOrderUpdate }) {
                   <MapPin size={14} className="text-slate-400 mt-0.5" />
                   <div>
                     <p class="font-bold text-slate-800">{selectedOrder.address}</p>
-                    <p class="text-[10px] text-slate-400">ডেলিভারি ঠিকানা</p>
+                    <p class="text-[10px] text-slate-400">Delivery Address</p>
                   </div>
                 </div>
 
@@ -261,12 +301,12 @@ export default function OrderManager({ orders, onOrderUpdate }) {
                   <ShoppingCart size={14} className="text-slate-400 mt-0.5" />
                   <div>
                     <p class="font-bold text-slate-800">
-                      {selectedOrder.product_name} ({selectedOrder.quantity} পিস)
+                      {selectedOrder.product_name} ({selectedOrder.quantity} pcs)
                     </p>
                     {selectedOrder.product_variant && (
-                      <p class="text-[10px] text-slate-500">কালার/সাইজ: {selectedOrder.product_variant}</p>
+                      <p class="text-[10px] text-slate-500">Variant: {selectedOrder.product_variant}</p>
                     )}
-                    <p class="text-[10px] text-slate-400">অর্ডারকৃত পণ্য</p>
+                    <p class="text-[10px] text-slate-400">Ordered Product</p>
                   </div>
                 </div>
 
@@ -274,9 +314,9 @@ export default function OrderManager({ orders, onOrderUpdate }) {
                   <Calendar size={14} className="text-slate-400 mt-0.5" />
                   <div>
                     <p class="font-bold text-slate-800">
-                      {new Date(selectedOrder.created_at).toLocaleString('bn-BD')}
+                      {new Date(selectedOrder.created_at).toLocaleString('en-US')}
                     </p>
-                    <p class="text-[10px] text-slate-400">অর্ডারের সময়</p>
+                    <p class="text-[10px] text-slate-400">Order Time</p>
                   </div>
                 </div>
 
@@ -285,7 +325,7 @@ export default function OrderManager({ orders, onOrderUpdate }) {
                     <AlertCircle size={14} className="text-amber-500 mt-0.5 flex-shrink-0" />
                     <div>
                       <p class="font-semibold text-slate-700 italic">"{selectedOrder.notes}"</p>
-                      <p class="text-[9px] text-slate-400 mt-0.5">গ্রাহকের বিশেষ নির্দেশনা</p>
+                      <p class="text-[9px] text-slate-400 mt-0.5">Customer Special Instructions</p>
                     </div>
                   </div>
                 )}
@@ -293,9 +333,9 @@ export default function OrderManager({ orders, onOrderUpdate }) {
 
               {/* Customer Lifetime History */}
               <div class="border-t border-slate-100 pt-4 space-y-3">
-                <h4 class="text-xs font-bold text-slate-800">ক্রেতার পূর্বের অর্ডার ইতিহাস (History)</h4>
+                <h4 class="text-xs font-bold text-slate-800">Customer Order History</h4>
                 {historyLoading ? (
-                  <p class="text-center text-[10px] text-slate-400">লোড হচ্ছে...</p>
+                  <p class="text-center text-[10px] text-slate-400">Loading...</p>
                 ) : customerHistory.length > 1 ? (
                   <div class="space-y-2 max-h-40 overflow-y-auto">
                     {customerHistory
@@ -305,7 +345,7 @@ export default function OrderManager({ orders, onOrderUpdate }) {
                           <div>
                             <p class="font-bold text-slate-700 line-clamp-1">{h.product_name}</p>
                             <p class="text-[9px] text-slate-400">
-                              {new Date(h.created_at).toLocaleDateString('bn-BD')}
+                              {new Date(h.created_at).toLocaleDateString('en-US')}
                             </p>
                           </div>
                           <span class="font-extrabold text-slate-800">৳{h.total_price}</span>
@@ -313,14 +353,26 @@ export default function OrderManager({ orders, onOrderUpdate }) {
                       ))}
                   </div>
                 ) : (
-                  <p class="text-[10px] text-slate-400">এটি এই ক্রেতার প্রথম অর্ডার।</p>
+                  <p class="text-[10px] text-slate-400">This is the customer's first order.</p>
                 )}
+              </div>
+
+              {/* Delete Action in Detail Drawer */}
+              <div className="border-t border-slate-100 pt-3">
+                <button
+                  type="button"
+                  onClick={() => handleDeleteOrder(selectedOrder.id)}
+                  className="flex items-center justify-center gap-1.5 w-full rounded-xl border border-rose-200 bg-rose-50/70 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-500 hover:text-white transition-all shadow-xs"
+                >
+                  <Trash2 size={14} />
+                  Delete This Order
+                </button>
               </div>
             </div>
           ) : (
             <div class="py-16 text-center text-xs text-slate-400 flex flex-col items-center justify-center gap-2">
               <AlertCircle size={24} className="text-slate-300" />
-              <span>যেকোনো অর্ডারের লাইনে ক্লিক করে বিস্তারিত ও কাস্টমার হিস্ট্রি দেখুন।</span>
+              <span>Click on any order row to view details and customer history.</span>
             </div>
           )}
         </div>

@@ -59,12 +59,14 @@ export function parseProductSizes(product) {
       allSizes: TOPS_SIZES,
       availableSizes: [],
       hasConfiguredSizes: false,
-      isFreeDelivery: false
+      isFreeDelivery: false,
+      entryStock: null
     }
   }
 
   let sizeStock = {}
   let isFreeDelivery = false
+  let entryStock = product.entry_stock !== undefined && product.entry_stock !== null ? Number(product.entry_stock) : null
   let cleanDescription = product.description || ''
 
   // 1. Direct property check (if column exists)
@@ -79,6 +81,13 @@ export function parseProductSizes(product) {
 
   // 3. Parse metadata tags from description
   if (cleanDescription) {
+    // Check entry stock marker <!--ENTRY_STOCK:50-->
+    const entryMatch = cleanDescription.match(/<!--ENTRY_STOCK:(\d+)-->/)
+    if (entryMatch) {
+      entryStock = Number(entryMatch[1])
+      cleanDescription = cleanDescription.replace(/<!--ENTRY_STOCK:\d+-->/g, '').trim()
+    }
+
     // Check free delivery marker
     if (cleanDescription.includes('<!--FREE_DELIVERY-->')) {
       isFreeDelivery = true
@@ -120,14 +129,15 @@ export function parseProductSizes(product) {
     allSizes,
     availableSizes,
     hasConfiguredSizes,
-    isFreeDelivery
+    isFreeDelivery,
+    entryStock
   }
 }
 
 /**
- * Encodes size stock map and free delivery flag into description for safe database storage
+ * Encodes size stock map, free delivery flag, and entry stock into description for safe database storage
  */
-export function encodeProductDescription(cleanDescription, sizeStock, isFreeDelivery = false) {
+export function encodeProductDescription(cleanDescription, sizeStock, isFreeDelivery = false, entryStock = null) {
   const desc = (cleanDescription || '').trim()
   const parts = []
   if (desc) parts.push(desc)
@@ -136,6 +146,9 @@ export function encodeProductDescription(cleanDescription, sizeStock, isFreeDeli
   }
   if (isFreeDelivery) {
     parts.push('<!--FREE_DELIVERY-->')
+  }
+  if (entryStock !== null && entryStock !== undefined && !isNaN(Number(entryStock))) {
+    parts.push(`<!--ENTRY_STOCK:${Number(entryStock)}-->`)
   }
   return parts.join('\n\n')
 }
@@ -150,3 +163,30 @@ export function calculateTotalStock(sizeStock) {
     return total + (!isNaN(num) && num > 0 ? num : 0)
   }, 0)
 }
+
+/**
+ * Strips HTML tags from text for compact cards, summaries, and search queries
+ */
+export function stripHtml(html) {
+  if (!html) return ''
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/**
+ * Formats rich text description for safe display.
+ * If text contains no HTML tags, converts line breaks to <br/>.
+ */
+export function formatRichText(htmlOrText) {
+  if (!htmlOrText) return ''
+  const hasHtml = /<[a-z][\s\S]*>/i.test(htmlOrText)
+  if (!hasHtml) {
+    return htmlOrText.replace(/\n/g, '<br/>')
+  }
+  return htmlOrText
+}
+

@@ -14,11 +14,13 @@ create table if not exists public.products (
     category text not null default 'General',
     image_urls text[] not null default '{}'::text[],
     is_free_delivery boolean not null default false,
+    entry_stock integer not null default 0,
     created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
 -- Migration for existing database (Run in Supabase SQL Editor if needed):
 -- alter table public.products add column if not exists is_free_delivery boolean not null default false;
+-- alter table public.products add column if not exists entry_stock integer not null default 0;
 
 -- 2. CUSTOMERS TABLE
 create table if not exists public.customers (

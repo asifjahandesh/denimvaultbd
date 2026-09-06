@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AlertTriangle, ShoppingBag, Tag, Layers, Eye, Truck } from 'lucide-react'
 import { translations } from '../utils/translations'
-import { parseProductSizes } from '../utils/productSizes'
+import { parseProductSizes, stripHtml } from '../utils/productSizes'
 
 export default function ProductCard({ product, lang = 'bn', onOrderClick }) {
   const { id, name, price, discount_price, stock, image_urls } = product
@@ -96,7 +96,7 @@ export default function ProductCard({ product, lang = 'bn', onOrderClick }) {
           <h3 class="text-lg font-bold text-slate-900 md:text-xl line-clamp-1">{name}</h3>
         </Link>
         <p class="mt-2 text-xs text-slate-500 md:text-sm line-clamp-2 min-h-[2.5rem]">
-          {cleanDescription || t.noDescription}
+          {stripHtml(cleanDescription) || t.noDescription}
         </p>
 
         {/* Available sizes preview */}

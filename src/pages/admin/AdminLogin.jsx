@@ -16,7 +16,7 @@ export default function AdminLogin({ onLoginSuccess }) {
       // Trigger success callback - state will be kept in memory only
       onLoginSuccess()
     } else {
-      setError('পাসওয়ার্ডটি ভুল হয়েছে। আবার চেষ্টা করুন।')
+      setError('Incorrect password. Please try again.')
     }
   }
 
@@ -32,7 +32,7 @@ export default function AdminLogin({ onLoginSuccess }) {
             <Logo size="xl" />
           </div>
           <h2 class="mt-5 text-xl font-extrabold text-white sm:text-2xl">Denim Vault BD</h2>
-          <p class="mt-1 text-xs text-slate-400">অ্যাডমিন কন্ট্রোল প্যানেলে প্রবেশ করতে পাসওয়ার্ড দিন।</p>
+          <p class="mt-1 text-xs text-slate-400">Enter password to access Admin Control Panel.</p>
         </div>
 
         {error && (
@@ -45,13 +45,13 @@ export default function AdminLogin({ onLoginSuccess }) {
           <div class="space-y-4 rounded-md shadow-sm">
             {/* Password Field */}
             <div>
-              <label class="block text-xs font-bold text-slate-400 mb-1.5">অ্যাডমিন পাসওয়ার্ড (Password)</label>
+              <label class="block text-xs font-bold text-slate-400 mb-1.5">Admin Password</label>
               <div class="relative">
                 <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   required
-                  placeholder="পাসওয়ার্ড লিখুন..."
+                  placeholder="Enter password..."
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   class="w-full rounded-xl border border-slate-800 bg-slate-900/50 py-3 pl-11 pr-11 text-xs text-white outline-none transition-all placeholder:text-slate-600 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 text-center tracking-widest font-bold"
@@ -72,7 +72,7 @@ export default function AdminLogin({ onLoginSuccess }) {
               type="submit"
               class="group relative flex w-full justify-center rounded-xl bg-gradient-to-r from-rose-500 to-rose-600 py-3 text-xs font-bold text-white shadow-xl shadow-rose-950/40 hover:from-rose-600 hover:to-rose-700 focus:outline-none transition-all"
             >
-              প্রবেশ করুন (Login)
+              Login to Admin Panel
             </button>
           </div>
         </form>

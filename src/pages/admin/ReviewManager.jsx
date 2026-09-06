@@ -30,7 +30,7 @@ const DEFAULT_SEEDS = [
     location: 'মিরপুর, ঢাকা',
     rating: 5,
     comment: 'পণ্যটির কোয়ালিটি অসাধারণ! আমি অর্ডার করার পরদিনেই ডেলিভারি পেয়েছি। ধন্যবাদ ডেনিম ভল্ট বিডিকে ক্যাশ অন ডেলিভারিতে এত ভালো প্রোডাক্ট দেয়ার জন্য।',
-    date: '১ দিন আগে',
+    date: '1 day ago',
     created_at: new Date(Date.now() - 86400000).toISOString(),
     is_seed: true
   },
@@ -40,7 +40,7 @@ const DEFAULT_SEEDS = [
     location: 'খুলনা সদর',
     rating: 5,
     comment: 'ডেলিভারি ম্যানের সামনে প্যাকেট খুলে চেক করে নিতে পেরেছি। পণ্যটি ঠিক যেমন ছবিতে দেখেছি তেমনই পেয়েছি। যেকোনো বিশ্বাসী ক্রেতা নিশ্চিন্তে কিনতে পারেন।',
-    date: '৩ দিন আগে',
+    date: '3 days ago',
     created_at: new Date(Date.now() - 259200000).toISOString(),
     is_seed: true
   },
@@ -50,7 +50,7 @@ const DEFAULT_SEEDS = [
     location: 'চৌহাট্টা, সিলেট',
     rating: 5,
     comment: 'খুবই ভালো সার্ভিস। আমি দ্বিতীয়বার অর্ডার করলাম। কাস্টমার সাপোর্টের ব্যবহার খুবই চমৎকার। ক্যাশ অন ডেলিভারিতে চেক করে নেয়ার সুবিধাটাই সেরা।',
-    date: '১ সপ্তাহ আগে',
+    date: '1 week ago',
     created_at: new Date(Date.now() - 604800000).toISOString(),
     is_seed: true
   }
@@ -199,22 +199,22 @@ export default function ReviewManager({ onReviewsUpdate }) {
 
       showToast(
         willBeHidden
-          ? `"${review.name}"-এর রিভিউটি ওয়েবসাইটে লুকানো হয়েছে।`
-          : `"${review.name}"-এর রিভিউটি এখন ওয়েবসাইটে প্রদর্শিত হচ্ছে।`,
+          ? `"${review.name}"'s review is now hidden from the store.`
+          : `"${review.name}"'s review is now visible on the store.`,
         'success'
       )
 
       onReviewsUpdate?.()
     } catch (err) {
       console.error('Error toggling visibility:', err)
-      showToast('স্ট্যাটাস আপডেট করতে সমস্যা হয়েছে।', 'error')
+      showToast('Failed to update review status.', 'error')
     }
   }
 
   // Delete a review permanently
   const handleDeleteReview = async (review) => {
     const isConfirm = window.confirm(
-      `আপনি কি নিশ্চিতভাবে "${review.name}"-এর রিভিউটি ডিলিট করতে চান?\nএটি ওয়েবসাইট এবং অ্যাডমিন প্যানেল থেকে স্থায়ীভাবে মুছে যাবে।`
+      `Are you sure you want to delete "${review.name}"'s review?\nThis will permanently remove it from the store and admin panel.`
     )
     if (!isConfirm) return
 
@@ -245,11 +245,11 @@ export default function ReviewManager({ onReviewsUpdate }) {
       // 4. Remove from UI state
       setReviews((prev) => prev.filter((r) => r.id !== review.id))
 
-      showToast('রিভিউটি সফলভাবে মুছে ফেলা হয়েছে।', 'success')
+      showToast('Review deleted successfully.', 'success')
       onReviewsUpdate?.()
     } catch (err) {
       console.error('Error deleting review:', err)
-      showToast('রিভিউ ডিলিট করতে সমস্যা হয়েছে।', 'error')
+      showToast('Failed to delete review.', 'error')
     }
   }
 
@@ -259,7 +259,7 @@ export default function ReviewManager({ onReviewsUpdate }) {
     setModalError('')
 
     if (!newName.trim() || !newComment.trim()) {
-      setModalError('অনুগ্রহ করে নাম এবং মন্তব্য পূরণ করুন।')
+      setModalError('Please enter both customer name and review comment.')
       return
     }
 
@@ -269,9 +269,9 @@ export default function ReviewManager({ onReviewsUpdate }) {
       name: newName.trim(),
       comment: newComment.trim(),
       rating: Number(newRating) || 5,
-      location: newLocation.trim() || 'ঢাকা, বাংলাদেশ',
+      location: newLocation.trim() || 'Dhaka, Bangladesh',
       is_hidden: false,
-      date: 'আজকে',
+      date: 'Today',
       created_at: new Date().toISOString(),
       isLive: true
     }
@@ -304,7 +304,7 @@ export default function ReviewManager({ onReviewsUpdate }) {
     setNewComment('')
     setNewRating(5)
     setNewLocation('')
-    showToast('নতুন রিভিউ সফলভাবে যুক্ত এবং প্রকাশিত হয়েছে।', 'success')
+    showToast('New review added and published successfully.', 'success')
     onReviewsUpdate?.()
   }
 
@@ -339,7 +339,7 @@ export default function ReviewManager({ onReviewsUpdate }) {
       {/* Toast Notification */}
       {toastMessage && (
         <div
-          className={`fixed top-5 right-5 z-50 flex items-center gap-2.5 rounded-2xl px-5 py-3 text-xs font-bold shadow-xl transition-all animate-soft-pulse ${
+          className={`fixed top-5 right-5 z-50 flex items-center gap-2.5 rounded-2xl px-5 py-3 text-xs font-bold shadow-xl transition-all ${
             toastMessage.type === 'error'
               ? 'bg-rose-500 text-white shadow-rose-200'
               : 'bg-emerald-600 text-white shadow-emerald-200'
@@ -359,10 +359,10 @@ export default function ReviewManager({ onReviewsUpdate }) {
         <div>
           <h2 className="text-xl font-extrabold text-slate-900 md:text-2xl flex items-center gap-2">
             <MessageSquare className="text-rose-500" size={24} />
-            কাস্টমার মতামত ও রিভিউ ম্যানেজমেন্ট
+            Customer Reviews Management
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            ওয়েবসাইটের সকল রিভিউ ডিলিট, প্রদর্শন (Show) অথবা হাইড (Hide) করুন।
+            Manage customer feedback: toggle visibility (Show / Hide) or permanently delete reviews.
           </p>
         </div>
 
@@ -371,10 +371,10 @@ export default function ReviewManager({ onReviewsUpdate }) {
             onClick={loadAllReviews}
             disabled={loading}
             className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50 shadow-sm transition-all"
-            title="রিফ্রেশ করুন"
+            title="Refresh reviews"
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            <span>রিফ্রেশ</span>
+            <span>Refresh</span>
           </button>
 
           <button
@@ -382,10 +382,10 @@ export default function ReviewManager({ onReviewsUpdate }) {
               setIsAddModalOpen(true)
               setModalError('')
             }}
-            className="flex items-center gap-2 rounded-xl bg-rose-500 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-rose-100 hover:bg-rose-600 transition-all hover:scale-105 active:scale-95"
+            className="flex items-center gap-2 rounded-xl bg-rose-500 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-rose-100 hover:bg-rose-600 transition-colors"
           >
             <Plus size={16} />
-            <span>নতুন রিভিউ যোগ করুন</span>
+            <span>Add New Review</span>
           </button>
         </div>
       </div>
@@ -393,22 +393,22 @@ export default function ReviewManager({ onReviewsUpdate }) {
       {/* Metric Cards */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <span className="text-xs font-bold text-slate-400">সর্বমোট রিভিউ</span>
+          <span className="text-xs font-bold text-slate-400">Total Reviews</span>
           <p className="mt-1 text-2xl font-black text-slate-900">{totalReviewsCount}</p>
         </div>
 
         <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4 shadow-sm">
-          <span className="text-xs font-bold text-emerald-600">ওয়েবসাইটে দৃশ্যমান</span>
+          <span className="text-xs font-bold text-emerald-600">Visible on Store</span>
           <p className="mt-1 text-2xl font-black text-emerald-700">{visibleCount}</p>
         </div>
 
         <div className="rounded-2xl border border-amber-100 bg-amber-50/50 p-4 shadow-sm">
-          <span className="text-xs font-bold text-amber-600">লুকানো রিভিউ (Hidden)</span>
+          <span className="text-xs font-bold text-amber-600">Hidden Reviews</span>
           <p className="mt-1 text-2xl font-black text-amber-700">{hiddenCount}</p>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <span className="text-xs font-bold text-slate-400">গড় রেটিং</span>
+          <span className="text-xs font-bold text-slate-400">Average Rating</span>
           <div className="mt-1 flex items-center gap-1.5">
             <span className="text-2xl font-black text-slate-900">{avgRating}</span>
             <Star size={18} className="fill-amber-400 text-amber-400" />
@@ -423,7 +423,7 @@ export default function ReviewManager({ onReviewsUpdate }) {
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input
             type="text"
-            placeholder="কাস্টমারের নাম বা মন্তব্যে খুঁজুন..."
+            placeholder="Search by customer name or review text..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full rounded-xl border border-slate-200 bg-slate-50/50 pl-10 pr-4 py-2 text-xs font-medium text-slate-800 outline-none transition-all focus:border-rose-400 focus:bg-white"
@@ -440,7 +440,7 @@ export default function ReviewManager({ onReviewsUpdate }) {
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
-            সবগুলো ({totalReviewsCount})
+            All ({totalReviewsCount})
           </button>
           <button
             onClick={() => setStatusFilter('visible')}
@@ -450,7 +450,7 @@ export default function ReviewManager({ onReviewsUpdate }) {
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
-            প্রকাশিত ({visibleCount})
+            Visible ({visibleCount})
           </button>
           <button
             onClick={() => setStatusFilter('hidden')}
@@ -460,7 +460,7 @@ export default function ReviewManager({ onReviewsUpdate }) {
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
-            লুকানো ({hiddenCount})
+            Hidden ({hiddenCount})
           </button>
         </div>
       </div>
@@ -470,9 +470,9 @@ export default function ReviewManager({ onReviewsUpdate }) {
         {filteredReviews.length === 0 ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center">
             <MessageSquare size={36} className="mx-auto text-slate-300 mb-3" />
-            <h4 className="text-sm font-bold text-slate-700">কোন রিভিউ পাওয়া যায়নি</h4>
+            <h4 className="text-sm font-bold text-slate-700">No reviews found</h4>
             <p className="text-xs text-slate-400 mt-1">
-              {searchQuery ? 'অন্য কি-ওয়ার্ড দিয়ে সার্চ করুন।' : 'বর্তমানে এই ক্যাটাগরিতে কোন রিভিউ নেই।'}
+              {searchQuery ? 'Try searching with different keywords.' : 'No reviews found for this filter.'}
             </p>
           </div>
         ) : (
@@ -503,24 +503,24 @@ export default function ReviewManager({ onReviewsUpdate }) {
                       {isHidden ? (
                         <span className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[10px] font-bold text-amber-700">
                           <EyeOff size={11} />
-                          ওয়েবসাইটে লুকানো (Hidden)
+                          Hidden from Store
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">
                           <Eye size={11} />
-                          লাইভ প্রদর্শিত (Visible)
+                          Visible on Store
                         </span>
                       )}
 
                       {/* Source tag */}
                       {review.is_seed ? (
                         <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
-                          ডিফল্ট রিভিউ
+                          Default Review
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 rounded-lg bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-600 border border-rose-100">
                           <Sparkles size={10} />
-                          কাস্টমার সাবমিশন
+                          Customer Submission
                         </span>
                       )}
                     </div>
@@ -535,7 +535,7 @@ export default function ReviewManager({ onReviewsUpdate }) {
                       )}
                       <span className="flex items-center gap-1">
                         <Calendar size={12} />
-                        {review.date || 'সম্প্রতি'}
+                        {review.date || 'Recent'}
                       </span>
                     </div>
 
@@ -555,17 +555,17 @@ export default function ReviewManager({ onReviewsUpdate }) {
                           ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm shadow-emerald-100'
                           : 'bg-amber-500 text-white hover:bg-amber-600 shadow-sm shadow-amber-100'
                       }`}
-                      title={isHidden ? 'ওয়েবসাইটে দেখান' : 'ওয়েবসাইট থেকে লুকান'}
+                      title={isHidden ? 'Show on store' : 'Hide from store'}
                     >
                       {isHidden ? (
                         <>
                           <Eye size={14} />
-                          <span>দেখান (Show)</span>
+                          <span>Show</span>
                         </>
                       ) : (
                         <>
                           <EyeOff size={14} />
-                          <span>লুকান (Hide)</span>
+                          <span>Hide</span>
                         </>
                       )}
                     </button>
@@ -574,10 +574,10 @@ export default function ReviewManager({ onReviewsUpdate }) {
                     <button
                       onClick={() => handleDeleteReview(review)}
                       className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-bold text-rose-600 hover:bg-rose-600 hover:text-white transition-all shadow-sm"
-                      title="স্থায়ীভাবে মুছে ফেলুন"
+                      title="Permanently delete review"
                     >
                       <Trash2 size={14} />
-                      <span>মুছুন (Delete)</span>
+                      <span>Delete</span>
                     </button>
                   </div>
                 </div>
@@ -589,8 +589,8 @@ export default function ReviewManager({ onReviewsUpdate }) {
 
       {/* Add Manual Review Modal for Admin */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-fade-in">
-          <div className="relative w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl border border-slate-100 p-6 animate-soft-pulse">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl border border-slate-100 p-6">
             <button
               onClick={() => setIsAddModalOpen(false)}
               className="absolute right-5 top-5 rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
@@ -604,10 +604,10 @@ export default function ReviewManager({ onReviewsUpdate }) {
               </div>
               <div>
                 <h3 className="text-base font-black text-slate-900">
-                  নতুন রিভিউ যুক্ত করুন
+                  Add New Review
                 </h3>
                 <p className="text-[11px] text-slate-400 font-medium">
-                  অ্যাডমিন হিসেবে একটি ভেরিফাইড রিভিউ তৈরি করুন
+                  Create a verified customer review as admin
                 </p>
               </div>
             </div>
@@ -622,12 +622,12 @@ export default function ReviewManager({ onReviewsUpdate }) {
               {/* Name */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  কাস্টমারের নাম *
+                  Customer Name *
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="যেমন: তানভীর আহমেদ"
+                  placeholder="e.g. Tanvir Ahmed"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-medium text-slate-800 outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100"
@@ -637,7 +637,7 @@ export default function ReviewManager({ onReviewsUpdate }) {
               {/* Rating */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  রেটিং
+                  Rating
                 </label>
                 <div className="flex items-center gap-1.5 bg-slate-50 p-2 rounded-xl border border-slate-200">
                   {[1, 2, 3, 4, 5].map((star) => (
@@ -645,7 +645,7 @@ export default function ReviewManager({ onReviewsUpdate }) {
                       type="button"
                       key={star}
                       onClick={() => setNewRating(star)}
-                      className="p-1 focus:outline-none transition-transform hover:scale-125"
+                      className="p-1 focus:outline-none transition-colors text-slate-400 hover:text-amber-400"
                     >
                       <Star
                         size={18}
@@ -655,7 +655,7 @@ export default function ReviewManager({ onReviewsUpdate }) {
                     </button>
                   ))}
                   <span className="text-xs font-bold text-slate-600 ml-2">
-                    {newRating} স্টার
+                    {newRating} Star{newRating > 1 ? 's' : ''}
                   </span>
                 </div>
               </div>
@@ -663,11 +663,11 @@ export default function ReviewManager({ onReviewsUpdate }) {
               {/* Location */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  লোকেশন / শহর (ঐচ্ছিক)
+                  Location / City (Optional)
                 </label>
                 <input
                   type="text"
-                  placeholder="যেমন: ধানমন্ডি, ঢাকা"
+                  placeholder="e.g. Dhanmondi, Dhaka"
                   value={newLocation}
                   onChange={(e) => setNewLocation(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-medium text-slate-800 outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100"
@@ -677,12 +677,12 @@ export default function ReviewManager({ onReviewsUpdate }) {
               {/* Comment */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  মন্তব্য / রিভিউ *
+                  Review / Comment *
                 </label>
                 <textarea
                   required
                   rows={3}
-                  placeholder="পণ্য ও সেবা সম্পর্কিত কাস্টমারের রিভিউ লিখুন..."
+                  placeholder="Write customer review regarding product quality, fit, delivery, etc..."
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-medium text-slate-800 outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100 resize-none"
@@ -696,15 +696,15 @@ export default function ReviewManager({ onReviewsUpdate }) {
                   onClick={() => setIsAddModalOpen(false)}
                   className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors"
                 >
-                  বাতিল
+                  Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-rose-500 hover:bg-rose-600 px-5 py-2 text-xs font-bold text-white shadow-md shadow-rose-100 transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-rose-500 hover:bg-rose-600 px-5 py-2 text-xs font-bold text-white shadow-md shadow-rose-100 transition-colors disabled:opacity-50"
                 >
                   <Send size={13} />
-                  <span>{isSubmitting ? 'সংরক্ষণ হচ্ছে...' : 'রিভিউ যুক্ত করুন'}</span>
+                  <span>{isSubmitting ? 'Saving...' : 'Add Review'}</span>
                 </button>
               </div>
             </form>

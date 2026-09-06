@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { supabase } from '../../supabase'
 import { Plus, Edit2, Trash2, Upload, X, Package, Tag, Layers, RefreshCw, CheckSquare, Truck } from 'lucide-react'
+import RichTextEditor from '../../components/admin/RichTextEditor'
 import {
   ITEM_CATEGORIES,
   CATEGORY_OPTIONS,
@@ -9,7 +10,8 @@ import {
   getCategorySizes,
   parseProductSizes,
   encodeProductDescription,
-  calculateTotalStock
+  calculateTotalStock,
+  stripHtml
 } from '../../utils/productSizes'
 
 export default function ProductManager({ products, onProductUpdate }) {
@@ -26,6 +28,7 @@ export default function ProductManager({ products, onProductUpdate }) {
   const [sizeStock, setSizeStock] = useState({})
   const [images, setImages] = useState([]) // Array of uploaded image URLs or selected files
   const [isFreeDelivery, setIsFreeDelivery] = useState(false)
+  const [entryStock, setEntryStock] = useState('')
 
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -64,6 +67,7 @@ export default function ProductManager({ products, onProductUpdate }) {
     setDiscountPrice('')
     setCategory(ITEM_CATEGORIES.TOPS)
     setIsFreeDelivery(false)
+    setEntryStock('')
     const initialSizes = {}
     TOPS_SIZES.forEach((sz) => { initialSizes[sz] = 10 })
     setSizeStock(initialSizes)
@@ -75,7 +79,7 @@ export default function ProductManager({ products, onProductUpdate }) {
 
   // Populate form for editing a product
   const handleEdit = (product) => {
-    const { cleanDescription, sizeStock: parsedSizes, category: parsedCategory, allSizes, isFreeDelivery: parsedFreeDelivery } = parseProductSizes(product)
+    const { cleanDescription, sizeStock: parsedSizes, category: parsedCategory, allSizes, isFreeDelivery: parsedFreeDelivery, entryStock: parsedEntryStock } = parseProductSizes(product)
     setEditingProduct(product)
     setName(product.name)
     setDescription(cleanDescription)
@@ -83,6 +87,7 @@ export default function ProductManager({ products, onProductUpdate }) {
     setDiscountPrice(product.discount_price || '')
     setCategory(parsedCategory)
     setIsFreeDelivery(Boolean(parsedFreeDelivery))
+    setEntryStock(parsedEntryStock !== null && parsedEntryStock !== undefined ? parsedEntryStock : (product.entry_stock ?? product.stock ?? ''))
 
     const loadedSizes = {}
     allSizes.forEach((sz) => {
@@ -137,7 +142,7 @@ export default function ProductManager({ products, onProductUpdate }) {
         }
       } catch (err) {
         console.error('Error uploading image:', err)
-        setError('কিছু ছবি আপলোড হতে সমস্যা হয়েছে। অনুগ্রহ করে স্টোরেজ বাকেট চেক করুন।')
+        setError('Error uploading some images. Please check the storage bucket.')
       }
     }
 
@@ -155,13 +160,33 @@ export default function ProductManager({ products, onProductUpdate }) {
     e.preventDefault()
     setError('')
 
-    if (!name.trim()) return setError('প্রোডাক্টের নাম দিন')
-    if (!price || Number(price) <= 0) return setError('সঠিক মূল্য দিন')
-    if (discountPrice && Number(discountPrice) >= Number(price)) return setError('ছাড়ের মূল্য সাধারণ মূল্যের চেয়ে কম হতে হবে')
+    if (!name.trim()) return setError('Please enter a product name')
+    if (!price || Number(price) <= 0) return setError('Please enter a valid price')
+    if (discountPrice && Number(discountPrice) >= Number(price)) return setError('Discount price must be less than regular price')
     const totalCalc = calculateTotalStock(sizeStock)
     const finalStock = Number(stock) >= 0 && stock !== '' ? Number(stock) : totalCalc
 
-    const encodedDescription = encodeProductDescription(description, sizeStock, isFreeDelivery)
+    // Entry Stock calculation:
+    // For editing: use explicit entryStock state if provided, otherwise preserve existing entry_stock or fallback to finalStock
+    // For new product: use explicit entryStock if provided, otherwise declared stock is the entry stock
+    let finalEntryStock = finalStock
+    if (editingProduct) {
+      if (entryStock !== '' && !isNaN(Number(entryStock))) {
+        finalEntryStock = Number(entryStock)
+      } else if (editingProduct.entry_stock !== undefined && editingProduct.entry_stock !== null) {
+        finalEntryStock = Number(editingProduct.entry_stock)
+      } else {
+        finalEntryStock = finalStock
+      }
+    } else {
+      if (entryStock !== '' && !isNaN(Number(entryStock))) {
+        finalEntryStock = Number(entryStock)
+      } else {
+        finalEntryStock = finalStock
+      }
+    }
+
+    const encodedDescription = encodeProductDescription(description, sizeStock, isFreeDelivery, finalEntryStock)
 
     const productData = {
       name,
@@ -169,6 +194,7 @@ export default function ProductManager({ products, onProductUpdate }) {
       price: Number(price),
       discount_price: discountPrice ? Number(discountPrice) : null,
       stock: finalStock,
+      entry_stock: finalEntryStock,
       category: category || ITEM_CATEGORIES.TOPS,
       image_urls: images,
       is_free_delivery: Boolean(isFreeDelivery)
@@ -182,14 +208,26 @@ export default function ProductManager({ products, onProductUpdate }) {
           .update(productData)
           .eq('id', editingProduct.id)
 
-        // Fallback: If is_free_delivery column doesn't exist yet in Supabase, save without it (it is already embedded in description)
-        if (error && error.message && error.message.includes('is_free_delivery')) {
-          const { is_free_delivery, ...fallbackData } = productData
-          const retry = await supabase
+        // Fallback: If is_free_delivery or entry_stock columns don't exist yet in Supabase
+        if (error && error.message && (error.message.includes('is_free_delivery') || error.message.includes('entry_stock'))) {
+          const fallbackData = { ...productData }
+          if (error.message.includes('is_free_delivery')) delete fallbackData.is_free_delivery
+          if (error.message.includes('entry_stock')) delete fallbackData.entry_stock
+          let retry = await supabase
             .from('products')
             .update(fallbackData)
             .eq('id', editingProduct.id)
           error = retry.error
+
+          if (error && error.message && (error.message.includes('is_free_delivery') || error.message.includes('entry_stock'))) {
+            delete fallbackData.is_free_delivery
+            delete fallbackData.entry_stock
+            const retry2 = await supabase
+              .from('products')
+              .update(fallbackData)
+              .eq('id', editingProduct.id)
+            error = retry2.error
+          }
         }
 
         if (error) throw error
@@ -199,13 +237,24 @@ export default function ProductManager({ products, onProductUpdate }) {
           .from('products')
           .insert([productData])
 
-        // Fallback: If is_free_delivery column doesn't exist yet in Supabase, insert without it
-        if (error && error.message && error.message.includes('is_free_delivery')) {
-          const { is_free_delivery, ...fallbackData } = productData
-          const retry = await supabase
+        // Fallback: If is_free_delivery or entry_stock columns don't exist yet in Supabase
+        if (error && error.message && (error.message.includes('is_free_delivery') || error.message.includes('entry_stock'))) {
+          const fallbackData = { ...productData }
+          if (error.message.includes('is_free_delivery')) delete fallbackData.is_free_delivery
+          if (error.message.includes('entry_stock')) delete fallbackData.entry_stock
+          let retry = await supabase
             .from('products')
             .insert([fallbackData])
           error = retry.error
+
+          if (error && error.message && (error.message.includes('is_free_delivery') || error.message.includes('entry_stock'))) {
+            delete fallbackData.is_free_delivery
+            delete fallbackData.entry_stock
+            const retry2 = await supabase
+              .from('products')
+              .insert([fallbackData])
+            error = retry2.error
+          }
         }
 
         if (error) throw error
@@ -215,7 +264,7 @@ export default function ProductManager({ products, onProductUpdate }) {
       onProductUpdate() // refresh list in dashboard
     } catch (err) {
       console.error(err)
-      setError('পণ্যটি সংরক্ষণ করতে সমস্যা হয়েছে। ডাটাবেজ কানেকশন চেক করুন।')
+      setError('Failed to save product. Please check database connection.')
     } finally {
       setLoading(false)
     }
@@ -223,7 +272,7 @@ export default function ProductManager({ products, onProductUpdate }) {
 
   // Handle product deletion
   const handleDelete = async (productId) => {
-    if (!window.confirm('আপনি কি নিশ্চিত যে এই পণ্যটি মুছে ফেলতে চান?')) return
+    if (!window.confirm('Are you sure you want to delete this product?')) return
 
     try {
       const { error } = await supabase
@@ -235,85 +284,85 @@ export default function ProductManager({ products, onProductUpdate }) {
       onProductUpdate()
     } catch (err) {
       console.error(err)
-      alert('পণ্যটি মুছে ফেলা সম্ভব হয়নি।')
+      alert('Failed to delete product.')
     }
   }
 
   return (
-    <div class="space-y-6">
+    <div className="space-y-6">
       {/* Header */}
-      <div class="flex items-center justify-between">
+      <div className="flex items-center justify-between">
         <div>
-          <h2 class="text-xl font-bold text-slate-800">পণ্য ব্যবস্থাপনা (Products)</h2>
-          <p class="text-xs text-slate-500">স্টোরের প্রোডাক্ট যোগ, এডিট এবং ডিলিট করার নিয়ন্ত্রণ প্যানেল।</p>
+          <h2 className="text-xl font-bold text-slate-800">Products Management</h2>
+          <p className="text-xs text-slate-500">Manage, add, edit, and organize store products.</p>
         </div>
         {!showForm && (
           <button
             onClick={handleAddNew}
-            class="flex items-center gap-1 rounded-xl bg-rose-500 px-4 py-2.5 text-xs font-bold text-white shadow-lg hover:bg-rose-600 transition-colors"
+            className="flex items-center gap-1 rounded-xl bg-rose-500 px-4 py-2.5 text-xs font-bold text-white shadow-lg hover:bg-rose-600 transition-colors"
           >
             <Plus size={16} />
-            নতুন প্রোডাক্ট যোগ করুন
+            Add New Product
           </button>
         )}
       </div>
 
       {/* CRUD Form Drawer/Block */}
       {showForm && (
-        <div class="rounded-3xl border border-slate-100 bg-white p-5 shadow-premium animate-soft-pulse">
-          <div class="flex items-center justify-between border-b border-slate-50 pb-4 mb-5">
-            <h3 class="text-sm font-bold text-slate-800">
-              {editingProduct ? 'প্রোডাক্ট এডিট করুন' : 'নতুন প্রোডাক্ট যোগ করুন'}
+        <div className="rounded-3xl border border-slate-100 bg-white p-5 shadow-premium">
+          <div className="flex items-center justify-between border-b border-slate-50 pb-4 mb-5">
+            <h3 className="text-sm font-bold text-slate-800">
+              {editingProduct ? 'Edit Product' : 'Add New Product'}
             </h3>
             <button
               onClick={() => setShowForm(false)}
-              class="text-xs text-slate-400 hover:text-slate-600"
+              className="text-xs text-slate-400 hover:text-slate-600 font-medium"
             >
-              বাতিল করুন
+              Cancel
             </button>
           </div>
 
           {error && (
-            <div class="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-600">
+            <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-600">
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} class="space-y-5">
-            <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
               {/* Product Name */}
               <div>
-                <label class="block text-xs font-bold text-slate-500 mb-1.5">প্রোডাক্টের নাম *</label>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">Product Name *</label>
                 <input
                   type="text"
                   required
-                  placeholder="উদা: প্রিমিয়াম জেন্টস ওয়াচ"
+                  placeholder="e.g. Premium Cotton Shirt"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  class="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-rose-400"
+                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-rose-400"
                 />
               </div>
 
               {/* Product Category Dropdown */}
               <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1.5">প্রোডাক্ট ক্যাটাগরি (Item Type) *</label>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">Product Category (Item Type) *</label>
                 <select
                   value={category}
                   onChange={(e) => handleCategoryChange(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-rose-400"
                 >
-                  <option value={ITEM_CATEGORIES.TOPS}>Tops item (টপস / শার্ট / টি-শার্ট / পোলো)</option>
-                  <option value={ITEM_CATEGORIES.JEANS_PANTS}>Jeans/Pants item (জিন্স / প্যান্ট / ট্রাউজার)</option>
+                  <option value={ITEM_CATEGORIES.TOPS}>Tops item (Shirts, T-Shirts, Polos, Hoodies)</option>
+                  <option value={ITEM_CATEGORIES.JEANS_PANTS}>Jeans/Pants item (Jeans, Trousers, Cargo)</option>
                 </select>
               </div>
 
               {/* Pricing details */}
               <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1.5">মূল্য (Price) *</label>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">Price (৳) *</label>
                 <input
                   type="number"
                   required
-                  placeholder="৳ ১,৫০০"
+                  placeholder="1500"
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-rose-400"
@@ -321,10 +370,10 @@ export default function ProductManager({ products, onProductUpdate }) {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1.5">ছাড়ের মূল্য (Discount Price - ঐচ্ছিক)</label>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">Discount Price (৳ - Optional)</label>
                 <input
                   type="number"
-                  placeholder="৳ ১,২০০"
+                  placeholder="1200"
                   value={discountPrice}
                   onChange={(e) => setDiscountPrice(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-rose-400"
@@ -348,16 +397,16 @@ export default function ProductManager({ products, onProductUpdate }) {
                     <div className="flex items-center gap-2">
                       <Truck size={16} className={isFreeDelivery ? 'text-emerald-600' : 'text-slate-400'} />
                       <span className="text-xs font-bold text-slate-800">
-                        ডেলিভারি চার্জ ফ্রি (Free Delivery)
+                        Free Delivery
                       </span>
                       {isFreeDelivery && (
                         <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-extrabold text-emerald-700">
-                          ফ্রি ডেলিভারি সক্রিয়
+                          Active
                         </span>
                       )}
                     </div>
                     <p className="text-[11px] text-slate-500 mt-1">
-                      এই বক্সে টিক দিলে ক্রেতাদের অর্ডারে কোনো ডেলিভারি চার্জ যুক্ত হবে না (ডেলিভারি সম্পূর্ণ ফ্রি ৳০)। আনচেক থাকলে সাধারণ ১২০ টাকা ডেলিভারি ফি যুক্ত হবে।
+                      When checked, no delivery fee is added for customers (Free Delivery ৳0). If unchecked, standard delivery fee (৳120) applies.
                     </p>
                   </div>
                 </label>
@@ -369,15 +418,15 @@ export default function ProductManager({ products, onProductUpdate }) {
                   <div>
                     <h4 className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
                       <Layers size={14} className="text-rose-500" />
-                      সাইজ ও স্টক বিবরণ ({category === ITEM_CATEGORIES.TOPS ? 'Tops: S, M, L, XL, XXL' : 'Jeans/Pants: 28, 30, 32, 34, 36, 38, 40, 42'})
+                      Size & Stock Breakdown ({category === ITEM_CATEGORIES.TOPS ? 'Tops: S, M, L, XL, XXL' : 'Jeans/Pants: 28, 30, 32, 34, 36, 38, 40, 42'})
                     </h4>
                     <p className="text-[10px] text-slate-500 mt-0.5">
-                      যেসব সাইজের স্টক ১ বা তার বেশি থাকবে, ক্রেতারা শুধু সেই সাইজগুলোই অর্ডার করতে পারবে। স্টক ০ থাকলে ক্রেতারা তা নির্বাচন করতে পারবে না।
+                      Sizes with 1 or more in stock will be available for customers. Sizes with 0 stock will be disabled.
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] font-bold text-slate-700 bg-white px-3 py-1 rounded-lg border border-slate-200 shadow-sm">
-                      মোট স্টক: <strong className="text-rose-600 font-black">{calculateTotalStock(sizeStock)}</strong> টি
+                      Total Stock: <strong className="text-rose-600 font-black">{calculateTotalStock(sizeStock)}</strong> pcs
                     </span>
                   </div>
                 </div>
@@ -406,7 +455,7 @@ export default function ProductManager({ products, onProductUpdate }) {
                                 : 'bg-slate-200 text-slate-500'
                             }`}
                           >
-                            {isAvail ? `${sizeStock[sz]} টি` : 'স্টক শেষ'}
+                            {isAvail ? `${sizeStock[sz]} pcs` : 'Out of Stock'}
                           </span>
                         </div>
                         <div className="flex items-center gap-1">
@@ -418,7 +467,7 @@ export default function ProductManager({ products, onProductUpdate }) {
                             onChange={(e) => handleSizeStockChange(sz, e.target.value)}
                             className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-center text-xs font-bold text-slate-800 outline-none focus:border-rose-400"
                           />
-                          <span className="text-[10px] text-slate-400 font-semibold">টি</span>
+                          <span className="text-[10px] text-slate-400 font-semibold">pcs</span>
                         </div>
                       </div>
                     )
@@ -428,32 +477,45 @@ export default function ProductManager({ products, onProductUpdate }) {
 
               {/* Total Stock */}
               <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1.5">মোট স্টক সংখ্যা (Total Stock) *</label>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">Current Total Stock *</label>
                 <input
                   type="number"
                   required
-                  placeholder="৫০"
+                  placeholder="50"
                   value={stock}
                   onChange={(e) => setStock(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-rose-400 font-bold text-slate-800"
                 />
-                <p className="text-[9px] text-slate-400 mt-1">ওপরের সাইজগুলোর যোগফল স্বয়ংক্রিয়ভাবে মোট স্টক হিসেবে গণনা করা হয়।</p>
+                <p className="text-[9px] text-slate-400 mt-1">Sum of sizes above is automatically set as total stock.</p>
+              </div>
+
+              {/* Entry Stock */}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">Initial Entry Stock</label>
+                <input
+                  type="number"
+                  placeholder="Initial stock (defaults to current stock if empty)"
+                  value={entryStock}
+                  onChange={(e) => setEntryStock(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-rose-400 font-bold text-slate-800"
+                />
+                <p className="text-[9px] text-slate-400 mt-1">Declared stock when product was created. Used for inventory tracking.</p>
               </div>
 
               {/* Images Multi-uploader */}
               <div>
-                <label class="block text-xs font-bold text-slate-500 mb-1.5">প্রোডাক্টের ছবি আপলোড করুন (একাধিক)</label>
-                <div class="relative flex items-center justify-center border-2 border-dashed border-slate-200 rounded-xl p-4 bg-slate-50 hover:bg-slate-100 transition-colors">
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">Upload Product Images (Multiple)</label>
+                <div className="relative flex items-center justify-center border-2 border-dashed border-slate-200 rounded-xl p-4 bg-slate-50 hover:bg-slate-100 transition-colors">
                   <input
                     type="file"
                     multiple
                     accept="image/*"
                     onChange={handleImageUpload}
-                    class="absolute inset-0 opacity-0 cursor-pointer"
+                    className="absolute inset-0 opacity-0 cursor-pointer"
                   />
-                  <div class="text-center space-y-1">
+                  <div className="text-center space-y-1">
                     <Upload size={20} className="mx-auto text-slate-400" />
-                    <p class="text-[10px] text-slate-500 font-semibold">ক্লিক করে ছবি সিলেক্ট করুন</p>
+                    <p className="text-[10px] text-slate-500 font-semibold">Click or drag images to upload</p>
                   </div>
                 </div>
               </div>
@@ -461,28 +523,28 @@ export default function ProductManager({ products, onProductUpdate }) {
 
             {/* Product Description */}
             <div>
-              <label class="block text-xs font-bold text-slate-500 mb-1.5">প্রোডাক্ট বিবরণ (Description)</label>
-              <textarea
-                rows={3}
-                placeholder="প্রোডাক্টের সংক্ষিপ্ত বিবরণ বা বিশেষত্ব..."
+              <label className="block text-xs font-bold text-slate-500 mb-1.5">
+                Product Description (Rich Text Editor - Bold, Italic, Sizes, Colors, etc.)
+              </label>
+              <RichTextEditor
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                class="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-rose-400"
+                onChange={setDescription}
+                placeholder="Write compelling product description, sizing guide, or key features here..."
               />
             </div>
 
             {/* Uploaded Images Preview */}
             {images.length > 0 && (
-              <div class="space-y-2">
-                <p class="text-[10px] font-bold text-slate-400">আপলোডকৃত ছবিসমূহ: {images.length} টি</p>
-                <div class="flex flex-wrap gap-3">
+              <div className="space-y-2">
+                <p className="text-[10px] font-bold text-slate-400">Uploaded Images: {images.length}</p>
+                <div className="flex flex-wrap gap-3">
                   {images.map((url, idx) => (
-                    <div key={idx} class="relative h-16 w-16 rounded-xl overflow-hidden border border-slate-100 group">
-                      <img src={url} alt="Uploaded preview" class="h-full w-full object-cover" />
+                    <div key={idx} className="relative h-16 w-16 rounded-xl overflow-hidden border border-slate-100 group">
+                      <img src={url} alt="Uploaded preview" className="h-full w-full object-cover" />
                       <button
                         type="button"
                         onClick={() => handleRemoveImage(idx)}
-                        class="absolute right-1 top-1 rounded-full bg-slate-900/60 p-0.5 text-white hover:bg-rose-600"
+                        className="absolute right-1 top-1 rounded-full bg-slate-900/60 p-0.5 text-white hover:bg-rose-600"
                       >
                         <X size={10} />
                       </button>
@@ -493,27 +555,27 @@ export default function ProductManager({ products, onProductUpdate }) {
             )}
 
             {uploading && (
-              <div class="text-[11px] text-rose-500 font-bold flex items-center gap-1">
+              <div className="text-[11px] text-rose-500 font-bold flex items-center gap-1">
                 <RefreshCw size={12} className="animate-spin" />
-                <span>ছবি আপলোড হচ্ছে, দয়া করে অপেক্ষা করুন...</span>
+                <span>Uploading images, please wait...</span>
               </div>
             )}
 
             {/* Save Buttons */}
-            <div class="flex justify-end gap-3 border-t border-slate-50 pt-4">
+            <div className="flex justify-end gap-3 border-t border-slate-50 pt-4">
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                class="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-bold text-slate-500 hover:bg-slate-50 transition-colors"
+                className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-bold text-slate-500 hover:bg-slate-50 transition-colors"
               >
-                বাতিল
+                Cancel
               </button>
               <button
                 type="submit"
                 disabled={loading || uploading}
-                class="rounded-xl bg-rose-500 px-6 py-2.5 text-xs font-bold text-white hover:bg-rose-600 shadow-md transition-colors"
+                className="rounded-xl bg-rose-500 px-6 py-2.5 text-xs font-bold text-white hover:bg-rose-600 shadow-md transition-colors"
               >
-                {loading ? 'সংরক্ষণ হচ্ছে...' : 'প্রোডাক্ট সংরক্ষণ করুন'}
+                {loading ? 'Saving...' : (editingProduct ? 'Save Changes' : 'Create Product')}
               </button>
             </div>
           </form>
@@ -521,46 +583,46 @@ export default function ProductManager({ products, onProductUpdate }) {
       )}
 
       {/* Products list Table */}
-      <div class="rounded-3xl border border-slate-100 bg-white p-5 shadow-premium">
+      <div className="rounded-3xl border border-slate-100 bg-white p-5 shadow-premium">
         {products.length > 0 ? (
-          <div class="overflow-x-auto">
-            <table class="w-full text-left text-xs border-collapse">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr class="text-slate-400 font-bold border-b border-slate-50">
-                  <th class="py-3 pr-4">ছবি</th>
-                  <th class="py-3 pr-4">প্রোডাক্টের নাম</th>
-                  <th class="py-3 pr-4">ক্যাটাগরি</th>
-                  <th class="py-3 pr-4">মূল্য ও ছাড়</th>
-                  <th class="py-3 pr-4">স্টক</th>
-                  <th class="py-3 pr-4 text-right">অ্যাকশন</th>
+                <tr className="text-slate-400 font-bold border-b border-slate-50">
+                  <th className="py-3 pr-4">Image</th>
+                  <th className="py-3 pr-4">Product Name</th>
+                  <th className="py-3 pr-4">Category</th>
+                  <th className="py-3 pr-4">Price & Discount</th>
+                  <th className="py-3 pr-4">Stock</th>
+                  <th className="py-3 pr-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody class="divide-y divide-slate-50">
+              <tbody className="divide-y divide-slate-50">
                 {products.map((product) => {
                   const { cleanDescription, availableSizes, sizeStock: itemSizeStock, category: prodCategory, isFreeDelivery: itemFreeDelivery } = parseProductSizes(product)
                   return (
-                    <tr key={product.id} class="text-slate-600 font-semibold hover:bg-slate-50/20">
-                      <td class="py-3 pr-4">
+                    <tr key={product.id} className="text-slate-600 font-semibold hover:bg-slate-50/20">
+                      <td className="py-3 pr-4">
                         <img
                           src={product.image_urls?.[0] || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=100&auto=format&fit=crop&q=80'}
                           alt={product.name}
-                          class="h-10 w-10 rounded-xl object-cover"
+                          className="h-10 w-10 rounded-xl object-cover"
                         />
                       </td>
-                      <td class="py-3 pr-4">
-                        <p class="font-bold text-slate-800">{product.name}</p>
-                        <p class="text-[9px] text-slate-400 max-w-xs line-clamp-1">{cleanDescription || 'কোন বিবরণ নেই'}</p>
+                      <td className="py-3 pr-4">
+                        <p className="font-bold text-slate-800">{product.name}</p>
+                        <p className="text-[9px] text-slate-400 max-w-xs line-clamp-1">{stripHtml(cleanDescription) || 'No description provided'}</p>
                       </td>
-                      <td class="py-3 pr-4">
-                        <div class="space-y-1">
-                          <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-700 font-bold">
+                      <td className="py-3 pr-4">
+                        <div className="space-y-1">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-700 font-bold">
                             <Layers size={10} className="text-rose-500" />
                             {prodCategory === ITEM_CATEGORIES.JEANS_PANTS ? 'Jeans/Pants item' : 'Tops item'}
                           </span>
                           {availableSizes.length > 0 && (
-                            <div class="flex flex-wrap gap-1 text-[9px] max-w-[150px]">
+                            <div className="flex flex-wrap gap-1 text-[9px] max-w-[150px]">
                               {availableSizes.map((s) => (
-                                <span key={s} class="bg-rose-50 text-rose-700 px-1.5 py-0.5 rounded font-bold border border-rose-100">
+                                <span key={s} className="bg-rose-50 text-rose-700 px-1.5 py-0.5 rounded font-bold border border-rose-100">
                                   {s}{itemSizeStock[s] !== undefined ? ` (${itemSizeStock[s]})` : ''}
                                 </span>
                               ))}
@@ -568,50 +630,50 @@ export default function ProductManager({ products, onProductUpdate }) {
                           )}
                         </div>
                       </td>
-                    <td class="py-3 pr-4">
+                    <td className="py-3 pr-4">
                       {product.discount_price ? (
                         <div>
-                          <p class="font-bold text-rose-600">৳{product.discount_price}</p>
-                          <p class="text-[9px] text-slate-400 line-through">৳{product.price}</p>
+                          <p className="font-bold text-rose-600">৳{product.discount_price}</p>
+                          <p className="text-[9px] text-slate-400 line-through">৳{product.price}</p>
                         </div>
                       ) : (
-                        <p class="font-bold text-slate-800">৳{product.price}</p>
+                        <p className="font-bold text-slate-800">৳{product.price}</p>
                       )}
                       <div>
                         {itemFreeDelivery ? (
-                          <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[9px] font-extrabold text-emerald-700 mt-1">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[9px] font-extrabold text-emerald-700 mt-1">
                             <Truck size={10} />
-                            ফ্রি ডেলিভারি
+                            Free Delivery
                           </span>
                         ) : (
-                          <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-semibold text-slate-500 mt-1">
-                            ডেলিভারি: ৳১২০
+                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-semibold text-slate-500 mt-1">
+                            Delivery: ৳120
                           </span>
                         )}
                       </div>
                     </td>
-                    <td class="py-3 pr-4">
+                    <td className="py-3 pr-4">
                       {product.stock <= 0 ? (
-                        <span class="text-rose-500 font-bold bg-rose-50 px-2 py-0.5 rounded-full text-[9px]">আউট অব স্টক</span>
+                        <span className="text-rose-500 font-bold bg-rose-50 px-2 py-0.5 rounded-full text-[9px]">Out of Stock</span>
                       ) : product.stock <= 5 ? (
-                        <span class="text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded-full text-[9px]">মাত্র {product.stock} টি বাকি</span>
+                        <span className="text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded-full text-[9px]">Only {product.stock} left</span>
                       ) : (
-                        <span class="text-slate-700 font-bold bg-slate-100 px-2 py-0.5 rounded-full text-[9px]">{product.stock} পিস</span>
+                        <span className="text-slate-700 font-bold bg-slate-100 px-2 py-0.5 rounded-full text-[9px]">{product.stock} pcs</span>
                       )}
                     </td>
-                    <td class="py-3 pr-4 text-right">
-                      <div class="flex justify-end gap-1.5">
+                    <td className="py-3 pr-4 text-right">
+                      <div className="flex justify-end gap-1.5">
                         <button
                           onClick={() => handleEdit(product)}
-                          class="rounded-lg border border-slate-100 p-2 text-slate-500 hover:bg-slate-50 hover:text-slate-800 transition-colors"
-                          title="এডিট"
+                          className="rounded-lg border border-slate-100 p-2 text-slate-500 hover:bg-slate-50 hover:text-slate-800 transition-colors"
+                          title="Edit"
                         >
                           <Edit2 size={13} />
                         </button>
                         <button
                           onClick={() => handleDelete(product.id)}
-                          class="rounded-lg border border-rose-50 p-2 text-rose-500 hover:bg-rose-50 hover:text-rose-700 transition-colors"
-                          title="মুছে ফেলুন"
+                          className="rounded-lg border border-rose-50 p-2 text-rose-500 hover:bg-rose-50 hover:text-rose-700 transition-colors"
+                          title="Delete"
                         >
                           <Trash2 size={13} />
                         </button>
@@ -624,9 +686,9 @@ export default function ProductManager({ products, onProductUpdate }) {
             </table>
           </div>
         ) : (
-          <div class="py-12 text-center text-xs text-slate-400 flex flex-col items-center justify-center gap-2">
+          <div className="py-12 text-center text-xs text-slate-400 flex flex-col items-center justify-center gap-2">
             <Package size={24} className="text-slate-300" />
-            <span>কোন পণ্য খুঁজে পাওয়া যায়নি। ওপরের বাটনে ক্লিক করে নতুন পণ্য যোগ করুন।</span>
+            <span>No products found. Click the button above to add a new product.</span>
           </div>
         )}
       </div>

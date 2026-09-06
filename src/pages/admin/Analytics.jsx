@@ -48,41 +48,41 @@ export default function Analytics({ orders, products }) {
 
   const statCards = [
     {
-      title: 'মোট আয় (Revenue)',
+      title: 'Total Revenue',
       value: `৳${stats.totalRevenue.toLocaleString()}`,
-      subtitle: `আজকের আয়: ৳${stats.todayRevenue.toLocaleString()}`,
+      subtitle: `Today's Revenue: ৳${stats.todayRevenue.toLocaleString()}`,
       icon: <DollarSign size={20} />,
       color: 'from-emerald-500 to-teal-600 shadow-emerald-100',
     },
     {
-      title: 'মোট অর্ডার (Total Orders)',
+      title: 'Total Orders',
       value: stats.totalOrders,
-      subtitle: `আজকের অর্ডার: ${stats.todayOrders} টি`,
+      subtitle: `Today's Orders: ${stats.todayOrders}`,
       icon: <ShoppingBag size={20} />,
       color: 'from-rose-500 to-rose-600 shadow-rose-100',
     },
     {
-      title: 'মোট প্রোডাক্ট (Products)',
+      title: 'Total Products',
       value: stats.totalProducts,
-      subtitle: 'সক্রিয় প্রোডাক্ট তালিকা',
+      subtitle: 'Active product inventory',
       icon: <Package size={20} />,
       color: 'from-indigo-500 to-blue-600 shadow-indigo-100',
     },
     {
-      title: 'আজকের অর্ডার (Today)',
+      title: "Today's Orders",
       value: stats.todayOrders,
-      subtitle: 'অপেক্ষমান অর্ডারগুলো দেখুন',
+      subtitle: 'Review pending orders',
       icon: <Calendar size={20} />,
       color: 'from-amber-500 to-orange-600 shadow-amber-100',
     },
   ]
 
   return (
-    <div class="space-y-8 animate-soft-pulse">
+    <div class="space-y-8">
       {/* Page Title */}
       <div>
-        <h2 class="text-xl font-bold text-slate-800">অ্যানালিটিক্স ড্যাশবোর্ড</h2>
-        <p class="text-xs text-slate-500">আপনার ব্যবসা এবং অর্ডারের সামগ্রিক পারফরম্যান্স রিপোর্ট।</p>
+        <h2 class="text-xl font-bold text-slate-800">Analytics Dashboard</h2>
+        <p class="text-xs text-slate-500">Overall performance report of your store business and orders.</p>
       </div>
 
       {/* Stats Cards Grid */}
@@ -112,9 +112,9 @@ export default function Analytics({ orders, products }) {
       {/* Recent Orders Section */}
       <div class="rounded-3xl border border-slate-100 bg-white p-5 shadow-premium">
         <div class="flex items-center justify-between border-b border-slate-50 pb-4">
-          <h3 class="text-sm font-bold text-slate-800">সাম্প্রতিক ৫টি অর্ডার</h3>
+          <h3 class="text-sm font-bold text-slate-800">Recent 5 Orders</h3>
           <span class="rounded-full bg-slate-50 px-3 py-1 text-[11px] font-bold text-slate-500">
-            রিয়েল-টাইম আপডেট
+            Real-time Update
           </span>
         </div>
 
@@ -123,11 +123,11 @@ export default function Analytics({ orders, products }) {
             <table class="w-full text-left text-xs border-collapse">
               <thead>
                 <tr class="text-slate-400 font-bold border-b border-slate-50">
-                  <th class="py-3.5 pr-4">কাস্টমার</th>
-                  <th class="py-3.5 pr-4">প্রোডাক্ট</th>
-                  <th class="py-3.5 pr-4">তারিখ</th>
-                  <th class="py-3.5 pr-4">মূল্য</th>
-                  <th class="py-3.5 pr-4 text-right">স্ট্যাটাস</th>
+                  <th class="py-3.5 pr-4">Customer</th>
+                  <th class="py-3.5 pr-4">Product</th>
+                  <th class="py-3.5 pr-4">Date</th>
+                  <th class="py-3.5 pr-4">Amount</th>
+                  <th class="py-3.5 pr-4 text-right">Status</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-50">
@@ -140,11 +140,11 @@ export default function Analytics({ orders, products }) {
                     <td class="py-3.5 pr-4">
                       <p class="font-bold text-slate-800">{order.product_name}</p>
                       {order.product_variant && (
-                        <p class="text-[10px] text-slate-400">ভেরিয়েন্ট: {order.product_variant}</p>
+                        <p class="text-[10px] text-slate-400">Variant: {order.product_variant}</p>
                       )}
                     </td>
                     <td class="py-3.5 pr-4 text-slate-500">
-                      {new Date(order.created_at).toLocaleDateString('bn-BD', {
+                      {new Date(order.created_at).toLocaleDateString('en-US', {
                         year: 'numeric',
                         month: 'short',
                         day: 'numeric',
@@ -159,10 +159,10 @@ export default function Analytics({ orders, products }) {
                         order.status === 'delivered' ? 'bg-emerald-50 text-emerald-600' :
                         'bg-rose-50 text-rose-600'
                       }`}>
-                        {order.status === 'pending' ? 'পেন্ডিং' :
-                         order.status === 'confirmed' ? 'কনফার্মড' :
-                         order.status === 'processing' ? 'প্রসেসিং' :
-                         order.status === 'delivered' ? 'ডেলিভার্ড' : 'বাতিল'}
+                        {order.status === 'pending' ? 'Pending' :
+                         order.status === 'confirmed' ? 'Confirmed' :
+                         order.status === 'processing' ? 'Processing' :
+                         order.status === 'delivered' ? 'Delivered' : 'Cancelled'}
                       </span>
                     </td>
                   </tr>
@@ -172,7 +172,7 @@ export default function Analytics({ orders, products }) {
           </div>
         ) : (
           <div class="py-8 text-center text-xs text-slate-400">
-            এখনো কোনো অর্ডার প্লেস করা হয়নি।
+            No orders have been placed yet.
           </div>
         )}
       </div>

@@ -18,7 +18,6 @@ import {
 } from '../utils/bangladeshGeo'
 
 export default function CheckoutModal({ product, onClose, deliveryCharges, whatsappNumber, lang = 'bn' }) {
-  // Sizing and category breakdown
   const {
     cleanDescription,
     sizeStock,
@@ -26,7 +25,8 @@ export default function CheckoutModal({ product, onClose, deliveryCharges, whats
     allSizes,
     availableSizes,
     hasConfiguredSizes,
-    isFreeDelivery
+    isFreeDelivery,
+    entryStock
   } = parseProductSizes(product)
 
   const productImages = useMemo(() => {
@@ -240,7 +240,7 @@ ${confirmPrompt}`
       if (selectedSize && updatedSizeStock[selectedSize] !== undefined) {
         updatedSizeStock[selectedSize] = Math.max(0, updatedSizeStock[selectedSize] - quantity)
       }
-      const updatedDescription = encodeProductDescription(cleanDescription, updatedSizeStock, isFreeDelivery)
+      const updatedDescription = encodeProductDescription(cleanDescription, updatedSizeStock, isFreeDelivery, entryStock)
 
       const { error: stockError } = await supabase
         .from('products')
@@ -275,7 +275,7 @@ ${confirmPrompt}`
 
   return (
     <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
-      <div class="relative w-full max-w-xl overflow-hidden rounded-3xl bg-white shadow-2xl animate-soft-pulse md:max-w-2xl">
+      <div class="relative w-full max-w-xl overflow-hidden rounded-3xl bg-white shadow-2xl md:max-w-2xl">
         {/* Header */}
         <div class="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-6 py-4">
           <div class="flex items-center gap-2">

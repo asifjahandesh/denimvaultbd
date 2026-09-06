@@ -31,9 +31,9 @@ export default function SettingsManager({ settings, onSettingsUpdate }) {
       setShopName(info.name || 'Denim Vault BD')
       setShopPhone(info.phone || '+8801700000000')
       setShopEmail(info.email || 'info@denimvaultbd.com')
-      setShopAddress(info.address || 'ঢাকা, বাংলাদেশ')
-      setShopDescription(info.description || 'সেরা কোয়ালিটির ডেনিম ও ফ্যাশন পণ্য সাশ্রয়ী মূল্যে সরাসরি আপনার দ্বারে।')
-      setPromoText(info.promo_text || '৫0% পর্যন্ত ছাড় এবং ফ্রি ডেলিভারি অফার!')
+      setShopAddress(info.address || 'Dhaka, Bangladesh')
+      setShopDescription(info.description || 'Premium quality denim and fashion wear delivered directly to your doorstep.')
+      setPromoText(info.promo_text || 'Up to 50% OFF and Free Delivery Offer!')
 
       const charges = settings.delivery_charges || {}
       setChargeInside(charges.inside_dhaka ?? 60)
@@ -100,194 +100,194 @@ export default function SettingsManager({ settings, onSettingsUpdate }) {
       }, 3000)
     } catch (err) {
       console.error('Error saving settings:', err)
-      setError('সেটিংস সংরক্ষণ করতে সমস্যা হয়েছে।')
+      setError('Failed to save settings.')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div class="space-y-6 animate-soft-pulse">
+    <div className="space-y-6">
       {/* Header */}
       <div>
-        <h2 class="text-xl font-bold text-slate-800">সেটিংস ব্যবস্থাপনা (Settings)</h2>
-        <p class="text-xs text-slate-500">আপনার শপের যোগাযোগের তথ্য, সোশ্যাল লিংক এবং ডেলিভারি চার্জ পরিবর্তন করুন।</p>
+        <h2 className="text-xl font-bold text-slate-800">Store Settings</h2>
+        <p className="text-xs text-slate-500">Manage shop details, contact info, delivery charges, and social media links.</p>
       </div>
 
       {success && (
-        <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-3.5 text-xs font-semibold text-emerald-600">
-          সেটিংস সফলভাবে সংরক্ষণ করা হয়েছে!
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3.5 text-xs font-semibold text-emerald-600">
+          Settings saved successfully!
         </div>
       )}
 
       {error && (
-        <div class="rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-xs font-semibold text-rose-600">
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-xs font-semibold text-rose-600">
           {error}
         </div>
       )}
 
-      <form onSubmit={handleSave} class="space-y-6">
+      <form onSubmit={handleSave} className="space-y-6">
         {/* Shop Info Card */}
-        <div class="rounded-3xl border border-slate-100 bg-white p-5 shadow-premium space-y-4">
-          <div class="flex items-center justify-between border-b border-slate-50 pb-3">
-            <h3 class="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+        <div className="rounded-3xl border border-slate-100 bg-white p-5 shadow-premium space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-50 pb-3">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
               <MapPin size={16} className="text-rose-500" />
-              সাধারণ শপ ইনফরমেশন
+              General Shop Information
             </h3>
           </div>
 
           {/* Official Brand Logo preview */}
-          <div class="flex items-center gap-4 rounded-2xl bg-slate-50 p-3.5 border border-slate-100">
+          <div className="flex items-center gap-4 rounded-2xl bg-slate-50 p-3.5 border border-slate-100">
             <Logo size="lg" />
             <div>
-              <h4 class="text-xs font-bold text-slate-800">অফিসিয়াল ডেনিম ভল্ট বিডি লোগো ও এসভিজি আইকন (Active)</h4>
-              <p class="text-[10px] text-slate-500 mt-0.5">
-                অফিসিয়াল গোল্ডেন স্টিচ ডেনিম ব্যাজ ও এসভিজি আইকনটি ওয়েবসাইট হেডার, ফুটার, ব্রাউজার ফেভিকন এবং অ্যাডমিন প্যানেলে সক্রিয় রয়েছে।
+              <h4 className="text-xs font-bold text-slate-800">Official Denim Vault BD Logo & Vector Badge (Active)</h4>
+              <p className="text-[10px] text-slate-500 mt-0.5">
+                Official Golden Stitch denim badge and vector icon active across header, footer, favicon, and admin panel.
               </p>
             </div>
           </div>
 
-          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label class="block text-xs font-bold text-slate-500 mb-1.5">শপের নাম *</label>
+              <label className="block text-xs font-bold text-slate-500 mb-1.5">Shop Name *</label>
               <input
                 type="text"
                 required
                 value={shopName}
                 onChange={(e) => setShopName(e.target.value)}
-                class="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-rose-400"
+                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-rose-400"
               />
             </div>
             <div>
-              <label class="block text-xs font-bold text-slate-500 mb-1.5">অর্ডার হেল্পলাইন নাম্বার *</label>
+              <label className="block text-xs font-bold text-slate-500 mb-1.5">Helpline Phone Number *</label>
               <input
                 type="text"
                 required
                 value={shopPhone}
                 onChange={(e) => setShopPhone(e.target.value)}
-                class="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-rose-400"
+                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-rose-400"
               />
             </div>
             <div>
-              <label class="block text-xs font-bold text-slate-500 mb-1.5">ইমেইল ঠিকানা *</label>
+              <label className="block text-xs font-bold text-slate-500 mb-1.5">Email Address *</label>
               <input
                 type="email"
                 required
                 value={shopEmail}
                 onChange={(e) => setShopEmail(e.target.value)}
-                class="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-rose-400"
+                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-rose-400"
               />
             </div>
             <div>
-              <label class="block text-xs font-bold text-slate-500 mb-1.5">শপের ঠিকানা *</label>
+              <label className="block text-xs font-bold text-slate-500 mb-1.5">Shop Address *</label>
               <input
                 type="text"
                 required
                 value={shopAddress}
                 onChange={(e) => setShopAddress(e.target.value)}
-                class="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-rose-400"
+                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-rose-400"
               />
             </div>
-            <div class="sm:col-span-2">
-              <label class="block text-xs font-bold text-slate-500 mb-1.5">শপের সংক্ষিপ্ত বিবরণ (Hero-তে প্রদর্শিত হবে)</label>
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-bold text-slate-500 mb-1.5">Shop Description (Storefront Hero)</label>
               <textarea
                 rows={2}
                 value={shopDescription}
                 onChange={(e) => setShopDescription(e.target.value)}
-                class="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-rose-400"
+                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-rose-400"
               />
             </div>
-            <div class="sm:col-span-2">
-              <label class="block text-xs font-bold text-slate-500 mb-1.5">প্রোমোশনাল ব্যানার টেক্সট (হেডারের নিচে প্রদর্শিত হবে)</label>
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-bold text-slate-500 mb-1.5">Promotional Banner Text (Header announcement)</label>
               <input
                 type="text"
                 value={promoText}
                 onChange={(e) => setPromoText(e.target.value)}
-                class="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-rose-400"
+                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-rose-400"
               />
             </div>
           </div>
         </div>
 
         {/* Shipping settings */}
-        <div class="rounded-3xl border border-slate-100 bg-white p-5 shadow-premium space-y-4">
-          <h3 class="text-sm font-bold text-slate-800 flex items-center gap-1.5 border-b border-slate-50 pb-3">
+        <div className="rounded-3xl border border-slate-100 bg-white p-5 shadow-premium space-y-4">
+          <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 border-b border-slate-50 pb-3">
             <Truck size={16} className="text-rose-500" />
-            ডেলিভারি চার্জ সেটিং
+            Delivery Charges Settings
           </h3>
-          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label class="block text-xs font-bold text-slate-500 mb-1.5">ঢাকার ভিতরে ডেলিভারি ফি (৳) *</label>
+              <label className="block text-xs font-bold text-slate-500 mb-1.5">Inside Dhaka Delivery Fee (৳) *</label>
               <input
                 type="number"
                 required
                 value={chargeInside}
                 onChange={(e) => setChargeInside(e.target.value)}
-                class="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-rose-400"
+                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-rose-400"
               />
             </div>
             <div>
-              <label class="block text-xs font-bold text-slate-500 mb-1.5">ঢাকার বাইরে ডেলিভারি ফি (৳) *</label>
+              <label className="block text-xs font-bold text-slate-500 mb-1.5">Outside Dhaka Delivery Fee (৳) *</label>
               <input
                 type="number"
                 required
                 value={chargeOutside}
                 onChange={(e) => setChargeOutside(e.target.value)}
-                class="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-rose-400"
+                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-rose-400"
               />
             </div>
           </div>
         </div>
 
         {/* Social settings */}
-        <div class="rounded-3xl border border-slate-100 bg-white p-5 shadow-premium space-y-4">
-          <h3 class="text-sm font-bold text-slate-800 flex items-center gap-1.5 border-b border-slate-50 pb-3">
+        <div className="rounded-3xl border border-slate-100 bg-white p-5 shadow-premium space-y-4">
+          <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 border-b border-slate-50 pb-3">
             <Facebook size={16} className="text-rose-500" />
-            যোগাযোগ ও সোশ্যাল মিডিয়া লিংক
+            Communication & Social Links
           </h3>
-          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label class="block text-xs font-bold text-slate-500 mb-1.5">ফেসবুক পেজ লিংক (Facebook Page Link) *</label>
+              <label className="block text-xs font-bold text-slate-500 mb-1.5">Facebook Page URL *</label>
               <input
                 type="url"
                 required
                 placeholder="https://facebook.com/page-name"
                 value={fbLink}
                 onChange={(e) => setFbLink(e.target.value)}
-                class="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-rose-400"
+                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-rose-400"
               />
             </div>
             <div>
-              <label class="block text-xs font-bold text-slate-500 mb-1.5">হোয়াটসঅ্যাপ নাম্বার (WhatsApp Number) *</label>
+              <label className="block text-xs font-bold text-slate-500 mb-1.5">WhatsApp Phone Number *</label>
               <input
                 type="text"
                 required
                 placeholder="+8801700000000"
                 value={waNumber}
                 onChange={(e) => setWaNumber(e.target.value)}
-                class="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-rose-400"
+                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-rose-400"
               />
-              <p class="text-[9px] text-slate-400 mt-1">দেশ কোড সহ দিন, উদাহরণ: +৮৮০১৭XXXXXXXX</p>
+              <p className="text-[9px] text-slate-400 mt-1">Include country code, e.g. +88017XXXXXXXX</p>
             </div>
           </div>
         </div>
 
         {/* Save button CTA */}
-        <div class="flex justify-end gap-3 pt-2">
+        <div className="flex justify-end gap-3 pt-2">
           <button
             type="submit"
             disabled={loading}
-            class="flex items-center gap-2 rounded-xl bg-gradient-to-r from-rose-500 to-rose-600 px-8 py-3.5 text-xs font-bold text-white shadow-xl shadow-rose-100 hover:from-rose-600 hover:to-rose-700 transition-all hover:shadow-rose-200"
+            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-rose-500 to-rose-600 px-8 py-3.5 text-xs font-bold text-white shadow-xl shadow-rose-100 hover:from-rose-600 hover:to-rose-700 transition-all hover:shadow-rose-200"
           >
             {loading ? (
               <>
                 <RefreshCw size={14} className="animate-spin" />
-                <span>সংরক্ষণ হচ্ছে...</span>
+                <span>Saving changes...</span>
               </>
             ) : (
               <>
                 <Save size={14} />
-                <span>সেটিংস পরিবর্তন নিশ্চিত করুন</span>
+                <span>Save Settings</span>
               </>
             )}
           </button>
