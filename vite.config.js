@@ -6,13 +6,6 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
-    host: true,
-    fs: {
-      allow: [
-        '.',
-        '..',
-        'C:/Users/Asif/.gemini/antigravity/brain'
-      ]
-    }
+    host: true
   }
 })
