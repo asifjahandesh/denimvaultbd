@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { supabase } from '../../supabase'
-import { Plus, Edit2, Trash2, Upload, X, Package, Tag, Layers, RefreshCw, CheckSquare } from 'lucide-react'
+import { Plus, Edit2, Trash2, Upload, X, Package, Tag, Layers, RefreshCw, CheckSquare, Truck } from 'lucide-react'
 import {
   ITEM_CATEGORIES,
   CATEGORY_OPTIONS,
@@ -25,6 +25,7 @@ export default function ProductManager({ products, onProductUpdate }) {
   const [category, setCategory] = useState(ITEM_CATEGORIES.TOPS)
   const [sizeStock, setSizeStock] = useState({})
   const [images, setImages] = useState([]) // Array of uploaded image URLs or selected files
+  const [isFreeDelivery, setIsFreeDelivery] = useState(false)
 
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -62,6 +63,7 @@ export default function ProductManager({ products, onProductUpdate }) {
     setPrice('')
     setDiscountPrice('')
     setCategory(ITEM_CATEGORIES.TOPS)
+    setIsFreeDelivery(false)
     const initialSizes = {}
     TOPS_SIZES.forEach((sz) => { initialSizes[sz] = 10 })
     setSizeStock(initialSizes)
@@ -73,13 +75,14 @@ export default function ProductManager({ products, onProductUpdate }) {
 
   // Populate form for editing a product
   const handleEdit = (product) => {
-    const { cleanDescription, sizeStock: parsedSizes, category: parsedCategory, allSizes } = parseProductSizes(product)
+    const { cleanDescription, sizeStock: parsedSizes, category: parsedCategory, allSizes, isFreeDelivery: parsedFreeDelivery } = parseProductSizes(product)
     setEditingProduct(product)
     setName(product.name)
     setDescription(cleanDescription)
     setPrice(product.price)
     setDiscountPrice(product.discount_price || '')
     setCategory(parsedCategory)
+    setIsFreeDelivery(Boolean(parsedFreeDelivery))
 
     const loadedSizes = {}
     allSizes.forEach((sz) => {
@@ -158,7 +161,7 @@ export default function ProductManager({ products, onProductUpdate }) {
     const totalCalc = calculateTotalStock(sizeStock)
     const finalStock = Number(stock) >= 0 && stock !== '' ? Number(stock) : totalCalc
 
-    const encodedDescription = encodeProductDescription(description, sizeStock)
+    const encodedDescription = encodeProductDescription(description, sizeStock, isFreeDelivery)
 
     const productData = {
       name,
@@ -167,23 +170,43 @@ export default function ProductManager({ products, onProductUpdate }) {
       discount_price: discountPrice ? Number(discountPrice) : null,
       stock: finalStock,
       category: category || ITEM_CATEGORIES.TOPS,
-      image_urls: images
+      image_urls: images,
+      is_free_delivery: Boolean(isFreeDelivery)
     }
 
     try {
       if (editingProduct) {
         // Update product
-        const { error } = await supabase
+        let { error } = await supabase
           .from('products')
           .update(productData)
           .eq('id', editingProduct.id)
 
+        // Fallback: If is_free_delivery column doesn't exist yet in Supabase, save without it (it is already embedded in description)
+        if (error && error.message && error.message.includes('is_free_delivery')) {
+          const { is_free_delivery, ...fallbackData } = productData
+          const retry = await supabase
+            .from('products')
+            .update(fallbackData)
+            .eq('id', editingProduct.id)
+          error = retry.error
+        }
+
         if (error) throw error
       } else {
         // Insert product
-        const { error } = await supabase
+        let { error } = await supabase
           .from('products')
           .insert([productData])
+
+        // Fallback: If is_free_delivery column doesn't exist yet in Supabase, insert without it
+        if (error && error.message && error.message.includes('is_free_delivery')) {
+          const { is_free_delivery, ...fallbackData } = productData
+          const retry = await supabase
+            .from('products')
+            .insert([fallbackData])
+          error = retry.error
+        }
 
         if (error) throw error
       }
@@ -306,6 +329,38 @@ export default function ProductManager({ products, onProductUpdate }) {
                   onChange={(e) => setDiscountPrice(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-rose-400"
                 />
+              </div>
+
+              {/* Free Delivery Toggle Checkbox */}
+              <div className="md:col-span-2">
+                <label className={`flex items-start gap-3 rounded-2xl border p-3.5 sm:p-4 cursor-pointer transition-all ${
+                  isFreeDelivery
+                    ? 'border-emerald-500 bg-emerald-50/60 shadow-sm ring-1 ring-emerald-200'
+                    : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100/60'
+                }`}>
+                  <input
+                    type="checkbox"
+                    checked={isFreeDelivery}
+                    onChange={(e) => setIsFreeDelivery(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded accent-emerald-600 cursor-pointer"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <Truck size={16} className={isFreeDelivery ? 'text-emerald-600' : 'text-slate-400'} />
+                      <span className="text-xs font-bold text-slate-800">
+                        ডেলিভারি চার্জ ফ্রি (Free Delivery)
+                      </span>
+                      {isFreeDelivery && (
+                        <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-extrabold text-emerald-700">
+                          ফ্রি ডেলিভারি সক্রিয়
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      এই বক্সে টিক দিলে ক্রেতাদের অর্ডারে কোনো ডেলিভারি চার্জ যুক্ত হবে না (ডেলিভারি সম্পূর্ণ ফ্রি ৳০)। আনচেক থাকলে সাধারণ ১২০ টাকা ডেলিভারি ফি যুক্ত হবে।
+                    </p>
+                  </div>
+                </label>
               </div>
 
               {/* Size & Stock Declaration Panel */}
@@ -482,7 +537,7 @@ export default function ProductManager({ products, onProductUpdate }) {
               </thead>
               <tbody class="divide-y divide-slate-50">
                 {products.map((product) => {
-                  const { cleanDescription, availableSizes, sizeStock: itemSizeStock, category: prodCategory } = parseProductSizes(product)
+                  const { cleanDescription, availableSizes, sizeStock: itemSizeStock, category: prodCategory, isFreeDelivery: itemFreeDelivery } = parseProductSizes(product)
                   return (
                     <tr key={product.id} class="text-slate-600 font-semibold hover:bg-slate-50/20">
                       <td class="py-3 pr-4">
@@ -522,6 +577,18 @@ export default function ProductManager({ products, onProductUpdate }) {
                       ) : (
                         <p class="font-bold text-slate-800">৳{product.price}</p>
                       )}
+                      <div>
+                        {itemFreeDelivery ? (
+                          <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[9px] font-extrabold text-emerald-700 mt-1">
+                            <Truck size={10} />
+                            ফ্রি ডেলিভারি
+                          </span>
+                        ) : (
+                          <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-semibold text-slate-500 mt-1">
+                            ডেলিভারি: ৳১২০
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td class="py-3 pr-4">
                       {product.stock <= 0 ? (

@@ -44,11 +44,16 @@ export default function ProductDetails({ lang = 'bn', setLang }) {
 
   const toggleColor = (idx) => {
     setSelectedColors((prev) => {
+      let next
       if (prev.includes(idx)) {
-        return prev.filter((i) => i !== idx)
+        next = prev.filter((i) => i !== idx)
       } else {
-        return [...prev, idx].sort((a, b) => a - b)
+        next = [...prev, idx].sort((a, b) => a - b)
       }
+      // Each selected color counts as an item; auto-sync quantity
+      const targetCount = Math.max(1, next.length)
+      setQuantity(targetCount)
+      return next
     })
     setActiveImageIndex(idx)
   }
@@ -63,7 +68,6 @@ export default function ProductDetails({ lang = 'bn', setLang }) {
   const [selectedSize, setSelectedSize] = useState('')
   const [quantity, setQuantity] = useState(1)
   const [notes, setNotes] = useState('')
-  const [deliveryArea, setDeliveryArea] = useState('inside_dhaka')
 
   // Bangladesh geographic dropdown options
   const allDistricts = useMemo(() => getAllDistricts(lang), [lang])
@@ -74,11 +78,6 @@ export default function ProductDetails({ lang = 'bn', setLang }) {
     setDistrict(selectedDistrict)
     setUpazila('')
     setThana('')
-    if (isDhakaDistrict(selectedDistrict)) {
-      setDeliveryArea('inside_dhaka')
-    } else {
-      setDeliveryArea('outside_dhaka')
-    }
   }
 
   const [orderLoading, setOrderLoading] = useState(false)
@@ -169,7 +168,7 @@ export default function ProductDetails({ lang = 'bn', setLang }) {
   }
 
   // Sizing & Category breakdown
-  const { cleanDescription, sizeStock, category: itemCategory, allSizes, availableSizes } = parseProductSizes(product)
+  const { cleanDescription, sizeStock, category: itemCategory, allSizes, availableSizes, isFreeDelivery } = parseProductSizes(product)
 
   // Price & Stock logic
   const hasDiscount = product.discount_price && product.discount_price < product.price
@@ -184,9 +183,8 @@ export default function ProductDetails({ lang = 'bn', setLang }) {
   const isSelectedSizeOutOfStock = selectedSize ? currentSizeStock <= 0 : isOutOfStock
   const isLowStock = currentSizeStock > 0 && currentSizeStock <= 5
 
-  const chargeInside = deliveryCharges?.inside_dhaka ?? 60
-  const chargeOutside = deliveryCharges?.outside_dhaka ?? 120
-  const currentDeliveryCharge = deliveryArea === 'inside_dhaka' ? chargeInside : chargeOutside
+  // Delivery charge calculation: 0 if isFreeDelivery is true, otherwise 120 Tk flat
+  const currentDeliveryCharge = isFreeDelivery ? 0 : 120
   const subtotal = unitPrice * quantity
   const totalAmount = subtotal + currentDeliveryCharge
 
@@ -205,7 +203,9 @@ export default function ProductDetails({ lang = 'bn', setLang }) {
     const variantLabel = lang === 'bn' ? 'সাইজ/কালার' : 'Size/Color'
     const qtyLabel = lang === 'bn' ? 'পরিমাণ' : 'Quantity'
     const totalLabel = lang === 'bn' ? 'মোট বিল' : 'Total Bill'
-    const shippingLabel = lang === 'bn' ? '(ডেলিভারি চার্জ সহ)' : '(Shipping included)'
+    const shippingLabel = currentDeliveryCharge === 0
+      ? (lang === 'bn' ? '(ফ্রি ডেলিভারি)' : '(Free Delivery)')
+      : (lang === 'bn' ? '(ডেলিভারি চার্জ ১২০ টাকা সহ)' : '(Delivery charge 120 Tk included)')
     
     const customerInfoLabel = t.whatsappMessageCustomerInfo
     const nameLabel = lang === 'bn' ? 'নাম' : 'Name'
@@ -326,7 +326,7 @@ ${confirmPrompt}`
       if (selectedSize && updatedSizeStock[selectedSize] !== undefined) {
         updatedSizeStock[selectedSize] = Math.max(0, updatedSizeStock[selectedSize] - quantity)
       }
-      const updatedDescription = encodeProductDescription(cleanDescription, updatedSizeStock)
+      const updatedDescription = encodeProductDescription(cleanDescription, updatedSizeStock, isFreeDelivery)
       const newTotalStock = Math.max(0, product.stock - quantity)
 
       const { error: stockError } = await supabase
@@ -463,21 +463,29 @@ ${confirmPrompt}`
                 )}
               </div>
 
-              {/* Stock status */}
-              {!isOutOfStock && (
-                <div>
-                  {isLowStock ? (
-                    <span class="inline-flex items-center gap-1.5 text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1 rounded-full border border-amber-100">
-                      <AlertTriangle size={12} />
-                      {t.lowStock.replace('{stock}', product.stock)}
-                    </span>
-                  ) : (
-                    <span class="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
-                      {t.stockAvailable}
-                    </span>
-                  )}
-                </div>
-              )}
+              {/* Stock status & Free Delivery Badge */}
+              <div className="flex flex-wrap items-center gap-2">
+                {!isOutOfStock && (
+                  <>
+                    {isLowStock ? (
+                      <span class="inline-flex items-center gap-1.5 text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1 rounded-full border border-amber-100">
+                        <AlertTriangle size={12} />
+                        {t.lowStock.replace('{stock}', product.stock)}
+                      </span>
+                    ) : (
+                      <span class="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
+                        {t.stockAvailable}
+                      </span>
+                    )}
+                  </>
+                )}
+                {isFreeDelivery && (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-black text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 shadow-sm">
+                    <Truck size={13} className="text-emerald-600" />
+                    {lang === 'bn' ? 'ফ্রি হোম ডেলিভারি' : 'Free Home Delivery'}
+                  </span>
+                )}
+              </div>
 
               {/* Size Selection Section */}
               <div class="border-t border-slate-100 pt-4 space-y-3">
@@ -851,66 +859,66 @@ ${confirmPrompt}`
                   )}
 
                   <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">{t.quantity}</label>
-                    <div class="flex items-center border border-slate-200 rounded-xl overflow-hidden max-w-[140px]">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-slate-700">{t.quantity}</label>
+                      {selectedColors.length > 1 && (
+                        <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100">
+                          {lang === 'bn' ? `${selectedColors.length}টি কালার সিলেক্টেড (${selectedColors.length}টি পণ্য)` : `${selectedColors.length} colors selected (${selectedColors.length} items)`}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden max-w-[140px]">
                       <button
                         type="button"
-                        onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                        class="px-3.5 py-2 bg-slate-50 text-slate-600 font-bold hover:bg-slate-100 transition-colors"
+                        onClick={() => setQuantity(Math.max(Math.max(1, selectedColors.length), quantity - 1))}
+                        className="px-3.5 py-2 bg-slate-50 text-slate-600 font-bold hover:bg-slate-100 transition-colors"
                       >
                         -
                       </button>
-                      <span class="flex-1 text-center text-xs font-bold">{quantity}</span>
+                      <span className="flex-1 text-center text-xs font-bold">{quantity}</span>
                       <button
                         type="button"
                         onClick={() => setQuantity(Math.min(currentSizeStock || product.stock, quantity + 1))}
-                        class="px-3.5 py-2 bg-slate-50 text-slate-600 font-bold hover:bg-slate-100 transition-colors"
+                        className="px-3.5 py-2 bg-slate-50 text-slate-600 font-bold hover:bg-slate-100 transition-colors"
                       >
                         +
                       </button>
                     </div>
                   </div>
 
-                  {/* Delivery charge radio */}
-                  <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-2">{t.deliveryArea}</label>
-                    <div class="grid grid-cols-2 gap-4">
-                      <label class={`flex cursor-pointer items-center justify-between rounded-xl border p-3 transition-all ${
-                        deliveryArea === 'inside_dhaka'
-                          ? 'border-rose-500 bg-rose-50/20 text-rose-700 font-bold'
-                          : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+                  {/* Delivery Information Banner */}
+                  <div className={`flex items-center justify-between rounded-xl border p-3 transition-all ${
+                    isFreeDelivery
+                      ? 'border-emerald-300 bg-emerald-50/70 text-emerald-900'
+                      : 'border-slate-200 bg-slate-50/80 text-slate-700'
+                  }`}>
+                    <div className="flex items-center gap-2.5">
+                      <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${
+                        isFreeDelivery ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
                       }`}>
-                        <div class="flex items-center gap-2">
-                          <input
-                            type="radio"
-                            name="deliveryAreaDetails"
-                            checked={deliveryArea === 'inside_dhaka'}
-                            onChange={() => setDeliveryArea('inside_dhaka')}
-                            class="accent-rose-500"
-                          />
-                          <span class="text-xs">{t.insideDhaka}</span>
-                        </div>
-                        <span class="text-xs">৳{chargeInside}</span>
-                      </label>
-
-                      <label class={`flex cursor-pointer items-center justify-between rounded-xl border p-3 transition-all ${
-                        deliveryArea === 'outside_dhaka'
-                          ? 'border-rose-500 bg-rose-50/20 text-rose-700 font-bold'
-                          : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
-                      }`}>
-                        <div class="flex items-center gap-2">
-                          <input
-                            type="radio"
-                            name="deliveryAreaDetails"
-                            checked={deliveryArea === 'outside_dhaka'}
-                            onChange={() => setDeliveryArea('outside_dhaka')}
-                            class="accent-rose-500"
-                          />
-                          <span class="text-xs">{t.outsideDhaka}</span>
-                        </div>
-                        <span class="text-xs">৳{chargeOutside}</span>
-                      </label>
+                        <Truck size={16} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold flex items-center gap-1.5">
+                          {isFreeDelivery 
+                            ? (lang === 'bn' ? 'ফ্রি ডেলিভারি!' : 'Free Delivery!')
+                            : (lang === 'bn' ? 'সারাদেশে হোম ডেলিভারি' : 'Nationwide Home Delivery')}
+                          {isFreeDelivery && (
+                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-extrabold text-emerald-700">
+                              SPECIAL
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-[10px] text-slate-500">
+                          {isFreeDelivery
+                            ? (lang === 'bn' ? 'এই পণ্যের সাথে সারা বাংলাদেশে ডেলিভারি ফ্রি' : 'Free delivery across Bangladesh')
+                            : (lang === 'bn' ? 'ক্যাশ অন ডেলিভারি (পণ্য চেক করে পরিশোধ)' : 'Cash on Delivery')}
+                        </p>
+                      </div>
                     </div>
+                    <span className={`text-xs font-black ${isFreeDelivery ? 'text-emerald-700' : 'text-slate-800'}`}>
+                      {isFreeDelivery ? (lang === 'bn' ? 'ফ্রি (৳০)' : 'Free (৳0)') : '৳১২০'}
+                    </span>
                   </div>
 
                   <div>
@@ -927,12 +935,14 @@ ${confirmPrompt}`
                   {/* Calculations */}
                   <div class="rounded-xl border border-slate-100 bg-slate-50/60 p-3.5 text-xs space-y-2">
                     <div class="flex justify-between text-slate-500">
-                      <span>{t.subtotal}</span>
-                      <span>৳{subtotal}</span>
+                      <span>{t.subtotal} {quantity > 1 ? `(${quantity} ${lang === 'bn' ? 'টি পণ্য' : 'items'})` : ''}</span>
+                      <span className="font-bold text-slate-800">৳{subtotal}</span>
                     </div>
                     <div class="flex justify-between text-slate-500">
                       <span>{t.deliveryCharge}</span>
-                      <span>৳{currentDeliveryCharge}</span>
+                      <span className={currentDeliveryCharge === 0 ? "font-bold text-emerald-600" : ""}>
+                        {currentDeliveryCharge === 0 ? (lang === 'bn' ? 'ফ্রি (৳০)' : 'Free (৳0)') : `৳${currentDeliveryCharge}`}
+                      </span>
                     </div>
                     <div class="flex justify-between border-t border-slate-100 pt-2 font-bold text-slate-800 text-sm">
                       <span>{t.totalBill}</span>
@@ -987,6 +997,10 @@ ${confirmPrompt}`
                         </span>
                       </div>
                     )}
+                    <div class="flex justify-between text-slate-500">
+                      <span>{t.quantity}:</span>
+                      <span class="font-bold text-slate-800">{quantity} {lang === 'bn' ? 'টি' : 'items'}</span>
+                    </div>
                     <div class="flex justify-between text-slate-500">
                       <span>{t.mobileLabel}</span>
                       <span class="font-bold text-slate-800">{phone}</span>

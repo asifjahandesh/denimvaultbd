@@ -16,7 +16,7 @@ export default function FAQ({ lang = 'bn' }) {
     },
     {
       question: 'ডেলিভারি চার্জ কত?',
-      answer: 'ঢাকার ভিতরে ডেলিভারি চার্জ ৬০ টাকা এবং ঢাকার বাইরে ডেলিভারি চার্জ ১২০ টাকা। আপনার অর্ডারের ঠিকানার উপর ভিত্তি করে এটি স্বয়ংক্রিয়ভাবে হিসাব করা হয়।',
+      answer: 'সারাদেশে হোম ডেলিভারি চার্জ মাত্র ১২০ টাকা। তবে ফ্রি ডেলিভারি চিহ্নিত পণ্যে কোনো ডেলিভারি চার্জ নেই (সম্পূর্ণ ফ্রি)!',
     },
     {
       question: 'অর্ডার করার জন্য কি আগে পেমেন্ট করতে হবে?',
@@ -39,7 +39,7 @@ export default function FAQ({ lang = 'bn' }) {
     },
     {
       question: 'What are the delivery charges?',
-      answer: 'Delivery charge inside Dhaka is 60 BDT and outside Dhaka is 120 BDT. This is calculated automatically based on your shipping address.',
+      answer: 'Home delivery nationwide is 120 BDT flat. Products marked with Free Delivery have zero delivery charge!',
     },
     {
       question: 'Do I need to pay in advance to order?',

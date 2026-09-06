@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { Check, ShoppingBag, X, MessageSquare, Tag, MapPin, Palette } from 'lucide-react'
+import { Check, ShoppingBag, X, MessageSquare, Tag, MapPin, Palette, Truck } from 'lucide-react'
 import { supabase } from '../supabase'
 import { translations } from '../utils/translations'
 import confetti from 'canvas-confetti'
@@ -25,7 +25,8 @@ export default function CheckoutModal({ product, onClose, deliveryCharges, whats
     category: itemCategory,
     allSizes,
     availableSizes,
-    hasConfiguredSizes
+    hasConfiguredSizes,
+    isFreeDelivery
   } = parseProductSizes(product)
 
   const productImages = useMemo(() => {
@@ -44,11 +45,16 @@ export default function CheckoutModal({ product, onClose, deliveryCharges, whats
 
   const toggleColor = (idx) => {
     setSelectedColors((prev) => {
+      let next
       if (prev.includes(idx)) {
-        return prev.filter((i) => i !== idx)
+        next = prev.filter((i) => i !== idx)
       } else {
-        return [...prev, idx].sort((a, b) => a - b)
+        next = [...prev, idx].sort((a, b) => a - b)
       }
+      // Each selected color counts as a product item; auto-update quantity
+      const targetCount = Math.max(1, next.length)
+      setQuantity(targetCount)
+      return next
     })
   }
 
@@ -63,7 +69,6 @@ export default function CheckoutModal({ product, onClose, deliveryCharges, whats
   })
   const [quantity, setQuantity] = useState(1)
   const [notes, setNotes] = useState('')
-  const [deliveryArea, setDeliveryArea] = useState('inside_dhaka') // inside_dhaka or outside_dhaka
 
   // Bangladesh geographic dropdown options
   const allDistricts = useMemo(() => getAllDistricts(lang), [lang])
@@ -74,12 +79,6 @@ export default function CheckoutModal({ product, onClose, deliveryCharges, whats
     setDistrict(selectedDistrict)
     setUpazila('')
     setThana('')
-    // Automatically suggest delivery area based on selected district
-    if (isDhakaDistrict(selectedDistrict)) {
-      setDeliveryArea('inside_dhaka')
-    } else {
-      setDeliveryArea('outside_dhaka')
-    }
   }
 
   const [loading, setLoading] = useState(false)
@@ -88,10 +87,8 @@ export default function CheckoutModal({ product, onClose, deliveryCharges, whats
 
   const t = translations[lang]
 
-  // Delivery charge settings
-  const chargeInside = deliveryCharges?.inside_dhaka ?? 60
-  const chargeOutside = deliveryCharges?.outside_dhaka ?? 120
-  const currentDeliveryCharge = deliveryArea === 'inside_dhaka' ? chargeInside : chargeOutside
+  // Delivery charge calculation: 0 if isFreeDelivery is true, otherwise 120 Tk flat
+  const currentDeliveryCharge = isFreeDelivery ? 0 : 120
 
   // Price & Stock calculations
   const unitPrice = product.discount_price || product.price
@@ -119,7 +116,9 @@ export default function CheckoutModal({ product, onClose, deliveryCharges, whats
     const variantLabel = lang === 'bn' ? 'সাইজ/কালার' : 'Size/Color'
     const qtyLabel = lang === 'bn' ? 'পরিমাণ' : 'Quantity'
     const totalLabel = lang === 'bn' ? 'মোট বিল' : 'Total Bill'
-    const shippingLabel = lang === 'bn' ? '(ডেলিভারি চার্জ সহ)' : '(Shipping included)'
+    const shippingLabel = currentDeliveryCharge === 0
+      ? (lang === 'bn' ? '(ফ্রি ডেলিভারি)' : '(Free Delivery)')
+      : (lang === 'bn' ? '(ডেলিভারি চার্জ ১২০ টাকা সহ)' : '(Delivery charge 120 Tk included)')
     
     const customerInfoLabel = t.whatsappMessageCustomerInfo
     const nameLabel = lang === 'bn' ? 'নাম' : 'Name'
@@ -241,7 +240,7 @@ ${confirmPrompt}`
       if (selectedSize && updatedSizeStock[selectedSize] !== undefined) {
         updatedSizeStock[selectedSize] = Math.max(0, updatedSizeStock[selectedSize] - quantity)
       }
-      const updatedDescription = encodeProductDescription(cleanDescription, updatedSizeStock)
+      const updatedDescription = encodeProductDescription(cleanDescription, updatedSizeStock, isFreeDelivery)
 
       const { error: stockError } = await supabase
         .from('products')
@@ -558,65 +557,66 @@ ${confirmPrompt}`
                 )}
 
                 <div>
-                  <label class="block text-xs font-bold text-slate-700 mb-1">{t.quantity}</label>
-                  <div class="flex items-center border border-slate-200 rounded-xl overflow-hidden max-w-[140px]">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700">{t.quantity}</label>
+                    {selectedColors.length > 1 && (
+                      <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-100">
+                        {lang === 'bn' ? `${selectedColors.length}টি কালার সিলেক্টেড (${selectedColors.length}টি পণ্য)` : `${selectedColors.length} colors selected (${selectedColors.length} items)`}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden max-w-[140px]">
                     <button
                       type="button"
-                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                      class="px-3.5 py-2 bg-slate-50 text-slate-600 font-extrabold hover:bg-slate-100 transition-colors"
+                      onClick={() => setQuantity(Math.max(Math.max(1, selectedColors.length), quantity - 1))}
+                      className="px-3.5 py-2 bg-slate-50 text-slate-600 font-extrabold hover:bg-slate-100 transition-colors"
                     >
                       -
                     </button>
-                    <span class="flex-1 text-center text-sm font-bold">{quantity}</span>
+                    <span className="flex-1 text-center text-sm font-bold">{quantity}</span>
                     <button
                       type="button"
                       onClick={() => setQuantity(Math.min(currentSizeStock || product.stock, quantity + 1))}
-                      class="px-3.5 py-2 bg-slate-50 text-slate-600 font-extrabold hover:bg-slate-100 transition-colors"
+                      className="px-3.5 py-2 bg-slate-50 text-slate-600 font-extrabold hover:bg-slate-100 transition-colors"
                     >
                       +
                     </button>
                   </div>
                 </div>
 
-                <div>
-                  <label class="block text-xs font-bold text-slate-700 mb-2">{t.deliveryArea}</label>
-                  <div class="grid grid-cols-2 gap-4">
-                    <label class={`flex cursor-pointer items-center justify-between rounded-2xl border p-3.5 transition-all ${
-                      deliveryArea === 'inside_dhaka'
-                        ? 'border-rose-500 bg-rose-50/40 text-rose-700 font-bold'
-                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                {/* Delivery Information Banner */}
+                <div className={`flex items-center justify-between rounded-2xl border p-3.5 transition-all ${
+                  isFreeDelivery
+                    ? 'border-emerald-300 bg-emerald-50/70 text-emerald-900'
+                    : 'border-slate-200 bg-slate-50/80 text-slate-700'
+                }`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${
+                      isFreeDelivery ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
                     }`}>
-                      <div class="flex items-center gap-2">
-                        <input
-                          type="radio"
-                          name="deliveryArea"
-                          checked={deliveryArea === 'inside_dhaka'}
-                          onChange={() => setDeliveryArea('inside_dhaka')}
-                          class="accent-rose-500"
-                        />
-                        <span class="text-xs">{t.insideDhaka}</span>
-                      </div>
-                      <span class="text-xs">৳{chargeInside}</span>
-                    </label>
-
-                    <label class={`flex cursor-pointer items-center justify-between rounded-2xl border p-3.5 transition-all ${
-                      deliveryArea === 'outside_dhaka'
-                        ? 'border-rose-500 bg-rose-50/40 text-rose-700 font-bold'
-                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                    }`}>
-                      <div class="flex items-center gap-2">
-                        <input
-                          type="radio"
-                          name="deliveryArea"
-                          checked={deliveryArea === 'outside_dhaka'}
-                          onChange={() => setDeliveryArea('outside_dhaka')}
-                          class="accent-rose-500"
-                        />
-                        <span class="text-xs">{t.outsideDhaka}</span>
-                      </div>
-                      <span class="text-xs">৳{chargeOutside}</span>
-                    </label>
+                      <Truck size={18} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold flex items-center gap-1.5">
+                        {isFreeDelivery 
+                          ? (lang === 'bn' ? 'ফ্রি ডেলিভারি!' : 'Free Delivery!')
+                          : (lang === 'bn' ? 'সারাদেশে হোম ডেলিভারি' : 'Nationwide Home Delivery')}
+                        {isFreeDelivery && (
+                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-extrabold text-emerald-700">
+                            SPECIAL OFFER
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">
+                        {isFreeDelivery
+                          ? (lang === 'bn' ? 'এই পণ্যের সাথে কোনো ডেলিভারি চার্জ নেই' : 'Zero delivery fee for this item')
+                          : (lang === 'bn' ? 'ক্যাশ অন ডেলিভারি (পণ্য হাতে পেয়ে চেক করে পরিশোধ)' : 'Cash on Delivery')}
+                      </p>
+                    </div>
                   </div>
+                  <span className={`text-xs font-black ${isFreeDelivery ? 'text-emerald-700' : 'text-slate-800'}`}>
+                    {isFreeDelivery ? (lang === 'bn' ? 'ফ্রি (৳০)' : 'Free (৳0)') : '৳১২০'}
+                  </span>
                 </div>
 
                 <div>
@@ -634,12 +634,14 @@ ${confirmPrompt}`
               {/* Price Calculation details */}
               <div class="rounded-2xl border border-slate-100 bg-slate-50/60 p-4 text-sm space-y-2.5">
                 <div class="flex justify-between text-slate-500">
-                  <span>{t.subtotal}</span>
-                  <span>৳{subtotal}</span>
+                  <span>{t.subtotal} {quantity > 1 ? `(${quantity} ${lang === 'bn' ? 'টি পণ্য' : 'items'})` : ''}</span>
+                  <span className="font-bold text-slate-800">৳{subtotal}</span>
                 </div>
                 <div class="flex justify-between text-slate-500">
                   <span>{t.deliveryCharge}</span>
-                  <span>৳{currentDeliveryCharge}</span>
+                  <span className={currentDeliveryCharge === 0 ? "font-bold text-emerald-600" : ""}>
+                    {currentDeliveryCharge === 0 ? (lang === 'bn' ? 'ফ্রি (৳০)' : 'Free (৳0)') : `৳${currentDeliveryCharge}`}
+                  </span>
                 </div>
                 <div class="flex justify-between border-t border-slate-100 pt-2.5 font-bold text-slate-800 text-base">
                   <span>{t.totalBill}</span>
@@ -690,6 +692,10 @@ ${confirmPrompt}`
                     </span>
                   </div>
                 )}
+                <div class="flex justify-between text-slate-500">
+                  <span>{t.quantity}:</span>
+                  <span class="font-bold text-slate-800">{quantity} {lang === 'bn' ? 'টি' : 'items'}</span>
+                </div>
                 <div class="flex justify-between text-slate-500">
                   <span>{t.mobileLabel}</span>
                   <span class="font-bold text-slate-800">{phone}</span>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertTriangle, ShoppingBag, Tag, Layers, Eye } from 'lucide-react'
+import { AlertTriangle, ShoppingBag, Tag, Layers, Eye, Truck } from 'lucide-react'
 import { translations } from '../utils/translations'
 import { parseProductSizes } from '../utils/productSizes'
 
@@ -14,7 +14,8 @@ export default function ProductCard({ product, lang = 'bn', onOrderClick }) {
     cleanDescription,
     category: itemCategory,
     allSizes,
-    availableSizes
+    availableSizes,
+    isFreeDelivery
   } = parseProductSizes(product)
 
   const hasDiscount = discount_price && discount_price < price
@@ -44,6 +45,14 @@ export default function ProductCard({ product, lang = 'bn', onOrderClick }) {
           <Layers size={10} />
           {itemCategory}
         </div>
+
+        {/* Free Delivery Badge */}
+        {isFreeDelivery && (
+          <div class="absolute left-4 bottom-4 z-10 flex items-center gap-1 rounded-full bg-emerald-600/90 backdrop-blur-md px-2.5 py-1 text-[10px] font-extrabold text-white shadow-md">
+            <Truck size={12} />
+            <span>{lang === 'bn' ? 'ফ্রি ডেলিভারি' : 'Free Delivery'}</span>
+          </div>
+        )}
 
         {/* Main Image */}
         <img

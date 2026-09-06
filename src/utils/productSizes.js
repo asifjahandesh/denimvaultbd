@@ -57,18 +57,35 @@ export function parseProductSizes(product) {
       sizeStock: {},
       category: ITEM_CATEGORIES.TOPS,
       allSizes: TOPS_SIZES,
-      availableSizes: []
+      availableSizes: [],
+      hasConfiguredSizes: false,
+      isFreeDelivery: false
     }
   }
 
   let sizeStock = {}
+  let isFreeDelivery = false
   let cleanDescription = product.description || ''
 
-  // 1. Direct property check (if present)
+  // 1. Direct property check (if column exists)
+  if (product.is_free_delivery === true || product.free_delivery === true) {
+    isFreeDelivery = true
+  }
+
+  // 2. Direct property check for size_stock
   if (product.size_stock && typeof product.size_stock === 'object') {
     sizeStock = { ...product.size_stock }
-  } else if (cleanDescription) {
-    // 2. Parse from description comment trailer <!--SIZES:{...}-->
+  }
+
+  // 3. Parse metadata tags from description
+  if (cleanDescription) {
+    // Check free delivery marker
+    if (cleanDescription.includes('<!--FREE_DELIVERY-->')) {
+      isFreeDelivery = true
+      cleanDescription = cleanDescription.replace(/<!--FREE_DELIVERY-->/g, '').trim()
+    }
+
+    // Parse from description comment trailer <!--SIZES:{...}-->
     const match = cleanDescription.match(/<!--SIZES:({[\s\S]*?})-->/)
     if (match) {
       try {
@@ -102,19 +119,25 @@ export function parseProductSizes(product) {
     category,
     allSizes,
     availableSizes,
-    hasConfiguredSizes
+    hasConfiguredSizes,
+    isFreeDelivery
   }
 }
 
 /**
- * Encodes size stock map into description for safe database storage
+ * Encodes size stock map and free delivery flag into description for safe database storage
  */
-export function encodeProductDescription(cleanDescription, sizeStock) {
+export function encodeProductDescription(cleanDescription, sizeStock, isFreeDelivery = false) {
   const desc = (cleanDescription || '').trim()
-  if (!sizeStock || Object.keys(sizeStock).length === 0) {
-    return desc
+  const parts = []
+  if (desc) parts.push(desc)
+  if (sizeStock && Object.keys(sizeStock).length > 0) {
+    parts.push(`<!--SIZES:${JSON.stringify(sizeStock)}-->`)
   }
-  return `${desc}\n\n<!--SIZES:${JSON.stringify(sizeStock)}-->`
+  if (isFreeDelivery) {
+    parts.push('<!--FREE_DELIVERY-->')
+  }
+  return parts.join('\n\n')
 }
 
 /**
