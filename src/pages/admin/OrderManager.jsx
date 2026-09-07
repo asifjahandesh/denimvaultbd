@@ -29,7 +29,18 @@ export default function OrderManager({ orders, settings, onOrderUpdate }) {
   }, [orders, searchQuery, statusFilter])
 
   // Update order status in Supabase
-  const handleStatusChange = async (orderId, newStatus) => {
+  const handleStatusChange = async (orderOrId, newStatus) => {
+    const orderId = typeof orderOrId === 'object' && orderOrId ? orderOrId.id : orderOrId
+    const targetOrder = typeof orderOrId === 'object' && orderOrId
+      ? orderOrId
+      : orders.find((o) => o.id === orderId) || (selectedOrder && selectedOrder.id === orderId ? selectedOrder : null)
+
+    // When status is changed to 'confirmed', open invoice modal immediately with zero delay
+    if (newStatus === 'confirmed' && targetOrder) {
+      setInvoiceOrder({ ...targetOrder, status: 'confirmed' })
+      setAutoPrintInvoice(true)
+    }
+
     try {
       const { error } = await supabase
         .from('orders')
@@ -42,15 +53,6 @@ export default function OrderManager({ orders, settings, onOrderUpdate }) {
       // Update local selected order view if open
       if (selectedOrder && selectedOrder.id === orderId) {
         setSelectedOrder({ ...selectedOrder, status: newStatus })
-      }
-
-      // Auto-generate and open official PDF invoice when order is confirmed!
-      if (newStatus === 'confirmed') {
-        const targetOrder = orders.find((o) => o.id === orderId) || (selectedOrder && selectedOrder.id === orderId ? selectedOrder : null)
-        if (targetOrder) {
-          setInvoiceOrder({ ...targetOrder, status: 'confirmed' })
-          setAutoPrintInvoice(true)
-        }
       }
     } catch (err) {
       console.error('Error updating status:', err)
@@ -231,7 +233,7 @@ export default function OrderManager({ orders, settings, onOrderUpdate }) {
                           </button>
                           <select
                             value={order.status}
-                            onChange={(e) => handleStatusChange(order.id, e.target.value)}
+                            onChange={(e) => handleStatusChange(order, e.target.value)}
                             class="rounded-xl border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-600 outline-none hover:border-slate-300"
                           >
                             <option value="pending">Pending</option>
@@ -284,7 +286,7 @@ export default function OrderManager({ orders, settings, onOrderUpdate }) {
                 <span class="text-xs font-bold text-slate-500">Current Status:</span>
                 <select
                   value={selectedOrder.status}
-                  onChange={(e) => handleStatusChange(selectedOrder.id, e.target.value)}
+                  onChange={(e) => handleStatusChange(selectedOrder, e.target.value)}
                   class="rounded-xl border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-700 outline-none"
                 >
                   <option value="pending">Pending</option>

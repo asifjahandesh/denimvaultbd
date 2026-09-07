@@ -90,65 +90,84 @@ export default function InvoiceModal({ isOpen, order, settings, autoPrint = fals
       height: 18px;
       border: 1px solid #000000;
     }
+
+    /* Clean, standalone print styles across PC & Mobile */
+    @media print {
+      @page {
+        size: A4 portrait;
+        margin: 6mm 8mm;
+      }
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      html, body {
+        background: #ffffff !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: visible !important;
+      }
+      /* Hide all UI elements outside the printable invoice */
+      body * {
+        visibility: hidden;
+      }
+      #printable-invoice-content,
+      #printable-invoice-content * {
+        visibility: visible;
+      }
+      #printable-invoice-content {
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: transparent !important;
+        display: block !important;
+      }
+      #invoice-modal-overlay {
+        position: static !important;
+        background: transparent !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        overflow: visible !important;
+        display: block !important;
+      }
+      #invoice-modal-card {
+        position: static !important;
+        max-height: none !important;
+        border: none !important;
+        box-shadow: none !important;
+        background: transparent !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow: visible !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+      .inv-box {
+        box-shadow: none !important;
+        border: 2px solid #000000 !important;
+        margin: 0 auto !important;
+        max-width: 100% !important;
+        width: 100% !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+    }
   `
 
-  // Iframe Printing Handler: opens browser print dialog targeting ONLY the invoice
+  // Native Browser Printing Handler: works across all PC & Mobile browsers without iframe blocking
   const handlePrint = () => {
-    const printArea = document.getElementById('printable-invoice-content')
-    if (!printArea) return
-
-    const iframe = document.createElement('iframe')
-    iframe.style.position = 'fixed'
-    iframe.style.right = '0'
-    iframe.style.bottom = '0'
-    iframe.style.width = '0'
-    iframe.style.height = '0'
-    iframe.style.border = '0'
-    document.body.appendChild(iframe)
-
-    const doc = iframe.contentWindow.document
-    doc.open()
-    doc.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Invoice-${invoiceNumber}</title>
-          <meta charset="utf-8" />
-          <style>
-            @page {
-              size: A4 portrait;
-              margin: 8mm 10mm;
-            }
-            * {
-              box-sizing: border-box;
-              margin: 0;
-              padding: 0;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-            }
-            body {
-              background: #fff;
-              padding: 0;
-            }
-            ${invoiceCss}
-          </style>
-        </head>
-        <body>
-          ${printArea.innerHTML}
-        </body>
-      </html>
-    `)
-    doc.close()
-
-    setTimeout(() => {
-      iframe.contentWindow.focus()
-      iframe.contentWindow.print()
-      setTimeout(() => {
-        try {
-          document.body.removeChild(iframe)
-        } catch (e) {}
-      }, 2000)
-    }, 450)
+    try {
+      window.print()
+    } catch (err) {
+      console.error('Print trigger error:', err)
+    }
   }
 
   // Auto-print upon confirmation
@@ -156,8 +175,12 @@ export default function InvoiceModal({ isOpen, order, settings, autoPrint = fals
     if (autoPrint && !printTriggeredRef.current) {
       printTriggeredRef.current = true
       const timer = setTimeout(() => {
-        handlePrint()
-      }, 600)
+        try {
+          window.print()
+        } catch (e) {
+          console.warn('Auto print was blocked by browser policy:', e)
+        }
+      }, 350)
       return () => clearTimeout(timer)
     }
   }, [autoPrint])
@@ -195,13 +218,19 @@ export default function InvoiceModal({ isOpen, order, settings, autoPrint = fals
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-2 sm:p-4 backdrop-blur-xs overflow-y-auto">
+    <div 
+      id="invoice-modal-overlay"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-2 sm:p-4 backdrop-blur-xs overflow-y-auto"
+    >
       <style>{invoiceCss}</style>
 
-      <div className="relative w-full max-w-4xl rounded-3xl bg-slate-100 shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[96vh] flex flex-col">
+      <div 
+        id="invoice-modal-card"
+        className="relative w-full max-w-4xl rounded-3xl bg-slate-100 shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[96vh] flex flex-col"
+      >
         
         {/* Modal Toolbar Header */}
-        <div className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-3.5 shrink-0">
+        <div className="no-print flex items-center justify-between border-b border-slate-200 bg-white px-5 py-3.5 shrink-0">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-50 text-rose-500 font-bold">
               <CheckCircle2 size={16} />

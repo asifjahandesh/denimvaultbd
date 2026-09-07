@@ -4,7 +4,7 @@ import { supabase } from '../supabase'
 import Header from '../components/Header'
 import Footer from '../components/Footer'
 import FloatingWidgets from '../components/FloatingWidgets'
-import { ArrowLeft, ShoppingBag, ShieldCheck, Truck, Check, MessageSquare, AlertTriangle, Layers, Tag, MapPin, Palette } from 'lucide-react'
+import { ArrowLeft, ShoppingBag, ShieldCheck, Truck, Check, MessageSquare, AlertTriangle, Layers, Tag, MapPin, Palette, AlertCircle } from 'lucide-react'
 import { translations } from '../utils/translations'
 import confetti from 'canvas-confetti'
 import {
@@ -189,9 +189,22 @@ export default function ProductDetails({ lang = 'bn', setLang }) {
   const subtotal = unitPrice * quantity
   const totalAmount = subtotal + currentDeliveryCharge
 
+  // Converts Bengali digits to English and strips non-numeric characters
+  const normalizeBangladeshiPhone = (input) => {
+    if (!input) return ''
+    const bnDigits = '০১২৩৪৫৬৭৮৯'
+    let normalized = input.toString().replace(/[০-৯]/g, (d) => bnDigits.indexOf(d))
+    normalized = normalized.replace(/[^0-9]/g, '')
+    if (normalized.startsWith('880')) {
+      normalized = normalized.slice(2)
+    }
+    return normalized
+  }
+
+  // Flexible Bangladeshi phone number validation
   const validatePhone = (num) => {
-    const regex = /^(?:\+88)?01[3-9]\d{8}$/
-    return regex.test(num.replace(/\s+/g, ''))
+    const clean = normalizeBangladeshiPhone(num)
+    return clean.length === 11 && clean.startsWith('01')
   }
 
   const getWhatsappLink = () => {
@@ -250,16 +263,36 @@ ${confirmPrompt}`
   }
 
   const handleCheckout = async (e) => {
-    e.preventDefault()
+    if (e) e.preventDefault()
     setOrderError('')
 
-    if (!name.trim()) return setOrderError(lang === 'bn' ? 'আপনার নাম লিখুন' : 'Please enter your name')
-    if (!phone.trim()) return setOrderError(lang === 'bn' ? 'আপনার মোবাইল নাম্বার লিখুন' : 'Please enter your mobile number')
-    if (!validatePhone(phone)) return setOrderError(lang === 'bn' ? 'একটি সঠিক বাংলাদেশী মোবাইল নাম্বার দিন (১১ ডিজিট)' : 'Please enter a valid Bangladeshi mobile number (11 digits)')
-    if (!district) return setOrderError(lang === 'bn' ? 'অনুগ্রহ করে আপনার জেলা নির্বাচন করুন' : 'Please select your district')
-    if (!upazila) return setOrderError(lang === 'bn' ? 'অনুগ্রহ করে আপনার উপজেলা নির্বাচন করুন' : 'Please select your upazila')
-    if (!thana) return setOrderError(lang === 'bn' ? 'অনুগ্রহ করে আপনার থানা নির্বাচন করুন' : 'Please select your thana')
-    if (!addressLine.trim()) return setOrderError(lang === 'bn' ? 'অনুগ্রহ করে বিস্তারিত এড্রেস লাইন (বাসা নং, রোড নং, ইত্যাদি) লিখুন' : 'Please enter your detailed address line')
+    const cleanPhone = normalizeBangladeshiPhone(phone)
+
+    // User-friendly validation
+    if (!name.trim()) {
+      setOrderError(lang === 'bn' ? 'আপনার সম্পূর্ণ নাম লিখুন' : 'Please enter your full name')
+      return
+    }
+    if (!phone.trim()) {
+      setOrderError(lang === 'bn' ? 'আপনার মোবাইল নাম্বার লিখুন' : 'Please enter your mobile number')
+      return
+    }
+    if (!validatePhone(phone)) {
+      setOrderError(lang === 'bn' ? 'সঠিক ১১ ডিজিটের মোবাইল নাম্বার দিন (যেমন: 017XXXXXXXX)' : 'Please enter a valid 11-digit mobile number (e.g. 017XXXXXXXX)')
+      return
+    }
+    if (!district) {
+      setOrderError(lang === 'bn' ? 'অনুগ্রহ করে জেলা নির্বাচন করুন' : 'Please select your district')
+      return
+    }
+    if (!thana && !upazila) {
+      setOrderError(lang === 'bn' ? 'অনুগ্রহ করে আপনার থানা বা উপজেলা নির্বাচন করুন' : 'Please select your thana or upazila')
+      return
+    }
+    if (!addressLine.trim()) {
+      setOrderError(lang === 'bn' ? 'অনুগ্রহ করে বিস্তারিত ঠিকানা (বাসা নং, রোড নং, এলাকা) লিখুন' : 'Please enter your detailed address line')
+      return
+    }
 
     const formattedAddress = formatFullAddress({
       addressLine,
@@ -271,7 +304,10 @@ ${confirmPrompt}`
     
     // Size Selection Validation
     if (availableSizes.length > 0 && !selectedSize) {
-      return setOrderError(lang === 'bn' ? 'অনুগ্রহ করে অর্ডার করার জন্য একটি সাইজ নির্বাচন করুন' : 'Please select an available size before ordering')
+      setOrderError(lang === 'bn' ? 'অনুগ্রহ করে অর্ডার করার জন্য একটি সাইজ নির্বাচন করুন' : 'Please select an available size before ordering')
+      const sizeEl = document.getElementById('size-selector-area')
+      if (sizeEl) sizeEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
     }
 
     if (selectedSize && sizeStock[selectedSize] !== undefined && sizeStock[selectedSize] < quantity) {
@@ -648,14 +684,14 @@ ${confirmPrompt}`
             </div>
 
             {/* Embedded Order Checkout Form */}
-            <div id="checkout-form" class="scroll-mt-20 rounded-3xl bg-white p-6 border-2 border-rose-100 shadow-premium space-y-5">
+            <div id="checkout-form" class="scroll-mt-20 rounded-3xl bg-white p-6 border-2 border-rose-100 shadow-premium space-y-5 mb-16 md:mb-0">
               <div class="flex items-center gap-2 border-b border-slate-50 pb-3">
                 <ShoppingBag size={20} className="text-rose-500" />
                 <h3 class="text-base font-extrabold text-slate-900">{t.checkoutHeader}</h3>
               </div>
 
               {!orderSuccess ? (
-                <form onSubmit={handleCheckout} class="space-y-4">
+                <form onSubmit={handleCheckout} noValidate class="space-y-4">
                   {orderError && (
                     <div class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-600">
                       {orderError}
@@ -780,7 +816,7 @@ ${confirmPrompt}`
 
                   {/* Size selection in checkout form */}
                   {allSizes.length > 0 && (
-                    <div class="space-y-2 rounded-2xl bg-slate-50/70 p-3.5 border border-slate-100">
+                    <div id="size-selector-area" class="scroll-mt-24 space-y-2 rounded-2xl bg-slate-50/70 p-3.5 border border-slate-100">
                       <div class="flex items-center justify-between">
                         <label class="block text-xs font-bold text-slate-700">
                           {t.selectSizeLabel}
@@ -983,14 +1019,22 @@ ${confirmPrompt}`
                     </div>
                   </div>
 
+                  {/* Error banner displayed right above submit button for mobile view */}
+                  {orderError && (
+                    <div id="checkout-error-banner" class="rounded-xl border border-rose-300 bg-rose-50 p-3.5 text-xs font-bold text-rose-700 flex items-center gap-2 shadow-xs">
+                      <AlertCircle size={16} className="shrink-0 text-rose-500" />
+                      <span>{orderError}</span>
+                    </div>
+                  )}
+
                   {/* Submit Order */}
                   <button
                     type="submit"
                     disabled={orderLoading || isOutOfStock}
-                    class={`flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-bold text-white shadow-lg transition-all ${
+                    class={`flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-base font-bold text-white shadow-lg transition-all ${
                       isOutOfStock
                         ? 'bg-slate-300 shadow-none cursor-not-allowed pointer-events-none'
-                        : 'bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700'
+                        : 'bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 active:scale-[0.98]'
                     }`}
                   >
                     {orderLoading ? t.confirmOrderProcessing : isOutOfStock ? t.outOfStock : t.confirmOrderBtn}

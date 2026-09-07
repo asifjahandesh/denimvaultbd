@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { Check, ShoppingBag, X, MessageSquare, Tag, MapPin, Palette, Truck } from 'lucide-react'
+import { Check, ShoppingBag, X, MessageSquare, Tag, MapPin, Palette, Truck, AlertCircle } from 'lucide-react'
 import { supabase } from '../supabase'
 import { translations } from '../utils/translations'
 import confetti from 'canvas-confetti'
@@ -99,10 +99,22 @@ export default function CheckoutModal({ product, onClose, deliveryCharges, whats
     ? Number(sizeStock[selectedSize])
     : product.stock
 
-  // Bangladeshi phone number regex (e.g. 01712345678 or +8801712345678)
+  // Converts Bengali digits to English and strips spaces/symbols
+  const normalizeBangladeshiPhone = (input) => {
+    if (!input) return ''
+    const bnDigits = '০১২৩৪৫৬৭৮৯'
+    let normalized = input.toString().replace(/[০-৯]/g, (d) => bnDigits.indexOf(d))
+    normalized = normalized.replace(/[^0-9]/g, '')
+    if (normalized.startsWith('880')) {
+      normalized = normalized.slice(2)
+    }
+    return normalized
+  }
+
+  // Flexible Bangladeshi phone number validation
   const validatePhone = (num) => {
-    const regex = /^(?:\+88)?01[3-9]\d{8}$/
-    return regex.test(num.replace(/\s+/g, ''))
+    const clean = normalizeBangladeshiPhone(num)
+    return clean.length === 11 && clean.startsWith('01')
   }
 
   // Construct WhatsApp pre-filled link
@@ -162,17 +174,18 @@ ${confirmPrompt}`
   }
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
+    if (e) e.preventDefault()
     setError('')
 
-    // Basic Validations
-    if (!name.trim()) return setError(lang === 'bn' ? 'আপনার নাম লিখুন' : 'Please enter your name')
+    const cleanPhone = normalizeBangladeshiPhone(phone)
+
+    // User-friendly validations
+    if (!name.trim()) return setError(lang === 'bn' ? 'আপনার সম্পূর্ণ নাম লিখুন' : 'Please enter your full name')
     if (!phone.trim()) return setError(lang === 'bn' ? 'আপনার মোবাইল নাম্বার লিখুন' : 'Please enter your mobile number')
-    if (!validatePhone(phone)) return setError(lang === 'bn' ? 'একটি সঠিক বাংলাদেশী মোবাইল নাম্বার দিন (১১ ডিজিট)' : 'Please enter a valid Bangladeshi mobile number (11 digits)')
+    if (!validatePhone(phone)) return setError(lang === 'bn' ? 'সঠিক ১১ ডিজিটের মোবাইল নাম্বার দিন (যেমন: 017XXXXXXXX)' : 'Please enter a valid 11-digit mobile number (e.g. 017XXXXXXXX)')
     if (!district) return setError(lang === 'bn' ? 'অনুগ্রহ করে জেলা নির্বাচন করুন' : 'Please select your district')
-    if (!upazila) return setError(lang === 'bn' ? 'অনুগ্রহ করে উপজেলা নির্বাচন করুন' : 'Please select your upazila')
-    if (!thana) return setError(lang === 'bn' ? 'অনুগ্রহ করে থানা নির্বাচন করুন' : 'Please select your thana')
-    if (!addressLine.trim()) return setError(lang === 'bn' ? 'অনুগ্রহ করে বিস্তারিত এড্রেস লাইন (বাসা নং, রোড নং, ইত্যাদি) লিখুন' : 'Please enter your detailed address line')
+    if (!thana && !upazila) return setError(lang === 'bn' ? 'অনুগ্রহ করে আপনার থানা বা উপজেলা নির্বাচন করুন' : 'Please select your thana or upazila')
+    if (!addressLine.trim()) return setError(lang === 'bn' ? 'অনুগ্রহ করে বিস্তারিত ঠিকানা (বাসা নং, রোড নং, এলাকা) লিখুন' : 'Please enter your detailed address line')
 
     const formattedAddress = formatFullAddress({
       addressLine,
@@ -308,7 +321,7 @@ ${confirmPrompt}`
         {/* Content Area */}
         <div class="max-h-[80vh] overflow-y-auto p-6">
           {!success ? (
-            <form onSubmit={handleSubmit} class="space-y-5">
+            <form onSubmit={handleSubmit} noValidate class="space-y-5">
               {/* Product Info Summary */}
               <div class="flex gap-4 rounded-2xl bg-slate-50 p-4 border border-slate-100">
                 <img
@@ -663,6 +676,14 @@ ${confirmPrompt}`
                   <span class="text-rose-600 text-lg">৳{totalAmount}</span>
                 </div>
               </div>
+
+              {/* Error Banner displayed directly above the submit button for mobile view */}
+              {error && (
+                <div class="rounded-xl border border-rose-300 bg-rose-50 p-3.5 text-xs font-bold text-rose-700 flex items-center gap-2 shadow-xs">
+                  <AlertCircle size={16} className="shrink-0 text-rose-500" />
+                  <span>{error}</span>
+                </div>
+              )}
 
               {/* Submit Button */}
               <button
