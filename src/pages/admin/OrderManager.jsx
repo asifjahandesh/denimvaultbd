@@ -227,7 +227,7 @@ export default function OrderManager({ orders, settings, onOrderUpdate }) {
                                 handleStatusChange(order, 'confirmed')
                               }}
                               className="inline-flex items-center gap-1 rounded-xl bg-emerald-500 hover:bg-emerald-600 px-2.5 py-1 text-[10px] font-bold text-white shadow-xs transition-all hover:shadow-emerald-200"
-                              title="Confirm Order & Generate PDF Invoice"
+                              title="Confirm Order & Generate Invoice Image"
                             >
                               <Check size={11} strokeWidth={3} />
                               <span>Confirm</span>
@@ -241,7 +241,7 @@ export default function OrderManager({ orders, settings, onOrderUpdate }) {
                               setAutoPrintInvoice(false)
                             }}
                             class="rounded-xl border border-blue-200 bg-blue-50/70 p-1.5 text-blue-600 hover:bg-blue-100 transition-colors"
-                            title="View / Download Official PDF Invoice"
+                            title="View & Download Invoice Image"
                           >
                             <FileText size={13} />
                           </button>
@@ -311,7 +311,7 @@ export default function OrderManager({ orders, settings, onOrderUpdate }) {
                 </select>
               </div>
 
-              {/* Quick Confirm & PDF Button for Pending orders */}
+              {/* Quick Confirm & Invoice Button for Pending orders */}
               {selectedOrder.status === 'pending' && (
                 <button
                   type="button"
@@ -319,11 +319,11 @@ export default function OrderManager({ orders, settings, onOrderUpdate }) {
                   className="flex items-center justify-center gap-2 w-full rounded-xl bg-emerald-500 hover:bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white transition-all shadow-md shadow-emerald-100 cursor-pointer"
                 >
                   <Check size={14} strokeWidth={3} />
-                  <span>Confirm Order & Generate PDF Invoice</span>
+                  <span>Confirm Order & Generate Invoice Image</span>
                 </button>
               )}
 
-              {/* View & Download Official PDF Invoice Button */}
+              {/* View & Download Official Invoice Image Button */}
               <button
                 type="button"
                 onClick={() => {
@@ -333,7 +333,7 @@ export default function OrderManager({ orders, settings, onOrderUpdate }) {
                 className="flex items-center justify-center gap-2 w-full rounded-xl border border-blue-200 bg-blue-50/80 hover:bg-blue-100/80 px-4 py-2 text-xs font-bold text-blue-700 transition-colors shadow-xs cursor-pointer"
               >
                 <FileText size={14} />
-                <span>View & Download Official PDF Invoice</span>
+                <span>View & Download Invoice Image</span>
               </button>
 
               {/* Customer Details */}
