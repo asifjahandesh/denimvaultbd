@@ -41,13 +41,15 @@ export default function ProductDetails({ lang = 'bn', setLang }) {
     return []
   }, [product])
 
-  // Independent multi-item order state (each item can have its own color and size)
+  // Independent multi-item order state (each item can have its own color, size, and quantity)
   const [orderItems, setOrderItems] = useState([
-    { id: 1, colorIndex: 0, size: '' }
+    { id: 1, colorIndex: 0, size: '', quantity: 1 }
   ])
 
-  // Total quantity is strictly the count of ordered items
-  const quantity = orderItems.length
+  // Total quantity is strictly the sum of all item quantities
+  const quantity = useMemo(() => {
+    return orderItems.reduce((sum, item) => sum + (Number(item.quantity) || 1), 0)
+  }, [orderItems])
 
   const handleAddItem = (preferredColorIdx = 0) => {
     let nextColorIdx = preferredColorIdx
@@ -60,7 +62,8 @@ export default function ProductDetails({ lang = 'bn', setLang }) {
     const newItem = {
       id: Date.now() + Math.random(),
       colorIndex: nextColorIdx,
-      size: availableSizes.length > 0 ? availableSizes[0] : ''
+      size: availableSizes.length > 0 ? availableSizes[0] : '',
+      quantity: 1
     }
     setOrderItems((prev) => [...prev, newItem])
     setActiveImageIndex(nextColorIdx)
@@ -70,6 +73,14 @@ export default function ProductDetails({ lang = 'bn', setLang }) {
   const handleRemoveItem = (itemId) => {
     if (orderItems.length <= 1) return
     setOrderItems((prev) => prev.filter((i) => i.id !== itemId))
+    setOrderError('')
+  }
+
+  const handleItemQuantityChange = (itemId, newQty) => {
+    const clamped = Math.max(1, parseInt(newQty, 10) || 1)
+    setOrderItems((prev) =>
+      prev.map((i) => (i.id === itemId ? { ...i, quantity: clamped } : i))
+    )
     setOrderError('')
   }
 
@@ -101,7 +112,8 @@ export default function ProductDetails({ lang = 'bn', setLang }) {
         {
           id: Date.now() + Math.random(),
           colorIndex: colorIdx,
-          size: availableSizes.length > 0 ? availableSizes[0] : ''
+          size: availableSizes.length > 0 ? availableSizes[0] : '',
+          quantity: 1
         }
       ])
     }
@@ -153,7 +165,7 @@ export default function ProductDetails({ lang = 'bn', setLang }) {
       const { availableSizes } = parseProductSizes(productData)
       if (availableSizes.length > 0) {
         setOrderItems([
-          { id: 1, colorIndex: 0, size: availableSizes[0] }
+          { id: 1, colorIndex: 0, size: availableSizes[0], quantity: 1 }
         ])
       }
 
@@ -278,10 +290,10 @@ export default function ProductDetails({ lang = 'bn', setLang }) {
       .map((item, idx) => {
         const itemColor = productImages.length > 1 ? `${t.colorItem} ${item.colorIndex + 1}` : ''
         const itemSize = item.size ? `Size: ${item.size}` : ''
+        const itemQty = Number(item.quantity) || 1
+        const qtySuffix = itemQty > 1 ? ` × ${itemQty} ${lang === 'bn' ? 'টি' : 'pcs'}` : ''
         const itemSpec = [itemColor, itemSize].filter(Boolean).join(', ')
-        return orderItems.length > 1
-          ? `• ${t.itemLabel || (lang === 'bn' ? 'আইটেম' : 'Item')} ${idx + 1}: ${itemSpec}`
-          : itemSpec
+        return `• ${orderItems.length > 1 ? `${t.itemLabel || (lang === 'bn' ? 'আইটেম' : 'Item')} ${idx + 1}: ` : ''}${itemSpec || (lang === 'bn' ? 'পণ্য' : 'Item')}${qtySuffix}`
       })
       .join('\n')
 
@@ -367,7 +379,8 @@ ${confirmPrompt}`
     const sizeCounts = {}
     orderItems.forEach((item) => {
       if (item.size) {
-        sizeCounts[item.size] = (sizeCounts[item.size] || 0) + 1
+        const itemQty = Number(item.quantity) || 1
+        sizeCounts[item.size] = (sizeCounts[item.size] || 0) + itemQty
       }
     })
 
@@ -375,8 +388,8 @@ ${confirmPrompt}`
       if (sizeStock[sz] !== undefined && sizeStock[sz] < neededQty) {
         return setOrderError(
           lang === 'bn'
-            ? `সাইজ ${sz}-এর পর্যাপ্ত স্টক নেই (মওজুদ: ${sizeStock[sz]}টি)।`
-            : `Insufficient stock for size ${sz} (available: ${sizeStock[sz]}).`
+            ? `সাইজ ${sz}-এর পর্যাপ্ত স্টক নেই (প্রয়োজন: ${neededQty}টি, মওজুদ: ${sizeStock[sz]}টি)।`
+            : `Insufficient stock for size ${sz} (needed: ${neededQty}, available: ${sizeStock[sz]}).`
         )
       }
     }
@@ -396,8 +409,11 @@ ${confirmPrompt}`
       .map((item, idx) => {
         const itemColor = productImages.length > 1 ? `${t.colorItem} ${item.colorIndex + 1}` : ''
         const itemSize = item.size ? `Size: ${item.size}` : ''
+        const itemQty = Number(item.quantity) || 1
+        const qtySuffix = itemQty > 1 ? ` × ${itemQty}` : ''
         const parts = [itemColor, itemSize].filter(Boolean).join(', ')
-        return orderItems.length > 1 ? `${t.itemLabel || (lang === 'bn' ? 'আইটেম' : 'Item')} ${idx + 1}: ${parts}` : parts
+        const fullItem = `${parts || (lang === 'bn' ? 'আইটেম' : 'Item')}${qtySuffix}`
+        return orderItems.length > 1 ? `${t.itemLabel || (lang === 'bn' ? 'আইটেম' : 'Item')} ${idx + 1}: ${fullItem}` : fullItem
       })
       .join(' + ')
 
@@ -887,7 +903,7 @@ ${confirmPrompt}`
                         <span>{t.orderItemsTitle || (lang === 'bn' ? 'অর্ডারের আইটেমসমূহ (সাইজ ও কালার নির্বাচন করুন)' : 'Order Items (Select Size & Color)')}</span>
                       </div>
                       <span className="text-[11px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100">
-                        {quantity} {lang === 'bn' ? 'টি আইটেম' : 'items'}
+                        {quantity} {lang === 'bn' ? 'টি মোট পণ্য' : 'total items'}
                       </span>
                     </div>
 
@@ -908,11 +924,16 @@ ${confirmPrompt}`
                                 />
                               )}
                               <div>
-                                <p className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
+                                <p className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5 flex-wrap">
                                   <span>{t.itemLabel || (lang === 'bn' ? 'আইটেম' : 'Item')} {idx + 1}:</span>
                                   {productImages.length > 1 && (
                                     <span className="text-rose-600 font-bold">
                                       {t.colorItem} {item.colorIndex + 1}
+                                    </span>
+                                  )}
+                                  {(Number(item.quantity) || 1) > 1 && (
+                                    <span className="rounded-md bg-rose-100 px-1.5 py-0.2 text-[10px] font-black text-rose-700">
+                                      ×{item.quantity}
                                     </span>
                                   )}
                                 </p>
@@ -1000,6 +1021,32 @@ ${confirmPrompt}`
                               </div>
                             </div>
                           )}
+
+                          {/* Quantity Stepper for this Item */}
+                          <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                            <span className="text-[11px] font-bold text-slate-700">
+                              {lang === 'bn' ? 'পরিমাণ (Qty):' : 'Quantity (Qty):'}
+                            </span>
+                            <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden bg-slate-50/70 shadow-2xs">
+                              <button
+                                type="button"
+                                onClick={() => handleItemQuantityChange(item.id, Math.max(1, (item.quantity || 1) - 1))}
+                                className="w-7 h-7 flex items-center justify-center bg-white text-slate-700 font-bold hover:bg-rose-50 hover:text-rose-600 transition-colors cursor-pointer border-r border-slate-200 text-xs active:scale-95"
+                              >
+                                -
+                              </button>
+                              <span className="w-9 text-center text-xs font-black text-slate-800 select-none">
+                                {item.quantity || 1}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleItemQuantityChange(item.id, (item.quantity || 1) + 1)}
+                                className="w-7 h-7 flex items-center justify-center bg-white text-slate-700 font-bold hover:bg-rose-50 hover:text-rose-600 transition-colors cursor-pointer border-l border-slate-200 text-xs active:scale-95"
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1127,6 +1174,7 @@ ${confirmPrompt}`
                             <span>
                               {orderItems.length > 1 ? `${t.itemLabel || (lang === 'bn' ? 'আইটেম' : 'Item')} ${idx + 1}` : (lang === 'bn' ? 'সিলেক্টেড আইটেম' : 'Selected Item')}
                               {productImages.length > 1 ? ` (${t.colorItem || (lang === 'bn' ? 'কালার' : 'Color')} ${item.colorIndex + 1})` : ''}
+                              {(Number(item.quantity) || 1) > 1 ? ` × ${item.quantity}` : ''}
                             </span>
                             <span className="font-bold text-rose-600">
                               {item.size ? `${lang === 'bn' ? 'সাইজ' : 'Size'}: ${item.size}` : ''}

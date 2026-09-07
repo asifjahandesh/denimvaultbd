@@ -41,17 +41,20 @@ export default function CheckoutModal({ product, onClose, deliveryCharges, whats
 
   const initialDefaultSize = availableSizes.length > 0 ? availableSizes[0] : ''
 
-  // Per-item configuration: [{ id, colorIndex, size }]
+  // Per-item configuration: [{ id, colorIndex, size, quantity }]
   const [orderItems, setOrderItems] = useState([
     {
       id: 1,
       colorIndex: 0,
-      size: initialDefaultSize
+      size: initialDefaultSize,
+      quantity: 1
     }
   ])
 
-  // Total quantity equals total items
-  const quantity = orderItems.length
+  // Total quantity equals the sum of quantities of all items
+  const quantity = useMemo(() => {
+    return orderItems.reduce((sum, item) => sum + (Number(item.quantity) || 1), 0)
+  }, [orderItems])
 
   const handleAddItem = (colorIdx = 0) => {
     setOrderItems((prev) => [
@@ -59,7 +62,8 @@ export default function CheckoutModal({ product, onClose, deliveryCharges, whats
       {
         id: Date.now() + Math.random(),
         colorIndex: colorIdx,
-        size: initialDefaultSize
+        size: initialDefaultSize,
+        quantity: 1
       }
     ])
     setError('')
@@ -68,6 +72,14 @@ export default function CheckoutModal({ product, onClose, deliveryCharges, whats
   const handleRemoveItem = (itemId) => {
     if (orderItems.length <= 1) return
     setOrderItems((prev) => prev.filter((item) => item.id !== itemId))
+    setError('')
+  }
+
+  const handleItemQuantityChange = (itemId, newQty) => {
+    const clamped = Math.max(1, parseInt(newQty, 10) || 1)
+    setOrderItems((prev) =>
+      prev.map((item) => (item.id === itemId ? { ...item, quantity: clamped } : item))
+    )
     setError('')
   }
 
@@ -100,7 +112,8 @@ export default function CheckoutModal({ product, onClose, deliveryCharges, whats
           {
             id: Date.now() + Math.random(),
             colorIndex: idx,
-            size: initialDefaultSize
+            size: initialDefaultSize,
+            quantity: 1
           }
         ]
       }
@@ -116,7 +129,7 @@ export default function CheckoutModal({ product, onClose, deliveryCharges, whats
     const counts = {}
     orderItems.forEach((it) => {
       if (it.size) {
-        counts[it.size] = (counts[it.size] || 0) + 1
+        counts[it.size] = (counts[it.size] || 0) + (Number(it.quantity) || 1)
       }
     })
     return counts
@@ -202,8 +215,10 @@ export default function CheckoutModal({ product, onClose, deliveryCharges, whats
     const itemsLines = orderItems.map((item, idx) => {
       const colorLabel = productImages.length > 1 ? `${t.colorItem} ${item.colorIndex + 1}` : ''
       const sizeLabel = item.size ? `Size: ${item.size}` : ''
+      const itemQty = Number(item.quantity) || 1
+      const qtySuffix = itemQty > 1 ? ` × ${itemQty} ${lang === 'bn' ? 'টি' : 'pcs'}` : ''
       const itemDesc = [colorLabel, sizeLabel].filter(Boolean).join(', ')
-      return `${idx + 1}. ${itemDesc || (lang === 'bn' ? '১টি' : '1 pc')}`
+      return `• ${orderItems.length > 1 ? `${t.itemLabel || (lang === 'bn' ? 'আইটেম' : 'Item')} ${idx + 1}: ` : ''}${itemDesc || (lang === 'bn' ? 'পণ্য' : 'Item')}${qtySuffix}`
     }).join('\n')
 
     const formattedAddress = formatFullAddress({
@@ -289,8 +304,11 @@ ${confirmPrompt}`
     const orderVariant = orderItems.map((item, idx) => {
       const colorLabel = productImages.length > 1 ? `${t.colorItem} ${item.colorIndex + 1}` : ''
       const sizeLabel = item.size ? `Size: ${item.size}` : ''
-      if (colorLabel && sizeLabel) return `${colorLabel} (${sizeLabel})`
-      return colorLabel || sizeLabel || `Item ${idx + 1}`
+      const itemQty = Number(item.quantity) || 1
+      const qtySuffix = itemQty > 1 ? ` × ${itemQty}` : ''
+      const specs = [colorLabel, sizeLabel ? `(${sizeLabel})` : ''].filter(Boolean).join(' ')
+      const itemText = `${specs || (lang === 'bn' ? 'আইটেম' : 'Item')}${qtySuffix}`
+      return orderItems.length > 1 ? `${t.itemLabel || (lang === 'bn' ? 'আইটেম' : 'Item')} ${idx + 1}: ${itemText}` : itemText
     }).join(' + ')
 
     try {
@@ -599,7 +617,7 @@ ${confirmPrompt}`
                       <span>{t.orderItemsTitle || 'অর্ডারের আইটেম ও সাইজ নির্বাচন করুন'}</span>
                     </label>
                     <span className="text-[11px] font-black text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-100">
-                      {lang === 'bn' ? `মোট ${orderItems.length}টি পণ্য` : `Total ${orderItems.length} items`}
+                      {lang === 'bn' ? `মোট ${quantity}টি পণ্য` : `Total ${quantity} items`}
                     </span>
                   </div>
 
@@ -620,11 +638,16 @@ ${confirmPrompt}`
                               />
                             )}
                             <div>
-                              <p className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
+                              <p className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5 flex-wrap">
                                 <span>{t.itemLabel || 'আইটেম'} {idx + 1}:</span>
                                 {productImages.length > 1 && (
                                   <span className="text-rose-600 font-bold">
                                     {t.colorItem} {item.colorIndex + 1}
+                                  </span>
+                                )}
+                                {(Number(item.quantity) || 1) > 1 && (
+                                  <span className="rounded-md bg-rose-100 px-1.5 py-0.2 text-[10px] font-black text-rose-700">
+                                    ×{item.quantity}
                                   </span>
                                 )}
                               </p>
@@ -712,6 +735,32 @@ ${confirmPrompt}`
                             </div>
                           </div>
                         )}
+
+                        {/* Quantity Stepper for this Item */}
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                          <span className="text-[11px] font-bold text-slate-700">
+                            {lang === 'bn' ? 'পরিমাণ (Qty):' : 'Quantity (Qty):'}
+                          </span>
+                          <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden bg-slate-50/70 shadow-2xs">
+                            <button
+                              type="button"
+                              onClick={() => handleItemQuantityChange(item.id, Math.max(1, (item.quantity || 1) - 1))}
+                              className="w-7 h-7 flex items-center justify-center bg-white text-slate-700 font-bold hover:bg-rose-50 hover:text-rose-600 transition-colors cursor-pointer border-r border-slate-200 text-xs active:scale-95"
+                            >
+                              -
+                            </button>
+                            <span className="w-9 text-center text-xs font-black text-slate-800 select-none">
+                              {item.quantity || 1}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleItemQuantityChange(item.id, (item.quantity || 1) + 1)}
+                              className="w-7 h-7 flex items-center justify-center bg-white text-slate-700 font-bold hover:bg-rose-50 hover:text-rose-600 transition-colors cursor-pointer border-l border-slate-200 text-xs active:scale-95"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -836,6 +885,7 @@ ${confirmPrompt}`
                         <span>
                           {orderItems.length > 1 ? `${t.itemLabel || (lang === 'bn' ? 'আইটেম' : 'Item')} ${idx + 1}` : (lang === 'bn' ? 'সিলেক্টেড আইটেম' : 'Selected Item')}
                           {productImages.length > 1 ? ` (${t.colorItem || (lang === 'bn' ? 'কালার' : 'Color')} ${item.colorIndex + 1})` : ''}
+                          {(Number(item.quantity) || 1) > 1 ? ` × ${item.quantity}` : ''}
                         </span>
                         <span className="font-bold text-rose-600">
                           {item.size ? `${lang === 'bn' ? 'সাইজ' : 'Size'}: ${item.size}` : ''}
