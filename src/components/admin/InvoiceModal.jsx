@@ -1,43 +1,106 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { supabase } from '../../supabase'
 import { X, Printer, Download, CheckCircle2, MessageSquare, Image as ImageIcon } from 'lucide-react'
 import { generateInvoiceImage, downloadInvoiceImage } from '../../utils/generateInvoiceImage'
 
-export default function InvoiceModal({ isOpen, order, settings, autoPrint = false, onClose }) {
+export default function InvoiceModal({ isOpen, order, settings, product = null, products = [], autoPrint = false, onClose }) {
   const downloadTriggeredRef = useRef(false)
+  const resolvedProductRef = useRef(null)
   const [invoiceData, setInvoiceData] = useState(null)
+  const [generating, setGenerating] = useState(false)
   const [imageDownloaded, setImageDownloaded] = useState(false)
 
-  // Generate canvas image whenever order or settings change
+  // Generate canvas image whenever order or settings or product changes
   useEffect(() => {
     if (!isOpen || !order) {
       setInvoiceData(null)
+      setGenerating(false)
       downloadTriggeredRef.current = false
+      resolvedProductRef.current = null
       return
     }
 
-    try {
-      const generated = generateInvoiceImage(order, settings)
-      setInvoiceData(generated)
+    let isMounted = true
 
-      // Automatically trigger image download on confirmation
-      if (autoPrint && !downloadTriggeredRef.current) {
-        downloadTriggeredRef.current = true
-        setTimeout(() => {
-          downloadInvoiceImage(order, settings)
-          setImageDownloaded(true)
-          setTimeout(() => setImageDownloaded(false), 5000)
-        }, 300)
+    async function buildInvoice() {
+      setGenerating(true)
+      try {
+        // Resolve target product
+        let targetProduct = product
+        if (!targetProduct && products && products.length > 0) {
+          targetProduct = products.find(
+            (p) =>
+              (order.product_id && p.id === order.product_id) ||
+              (p.name && order.product_name && p.name.trim().toLowerCase() === order.product_name.trim().toLowerCase())
+          )
+        }
+
+        // Supabase query fallback if not found
+        if (!targetProduct && order.product_name) {
+          try {
+            const { data } = await supabase
+              .from('products')
+              .select('*')
+              .eq('name', order.product_name)
+              .limit(1)
+            if (data && data[0]) {
+              targetProduct = data[0]
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
+
+        resolvedProductRef.current = targetProduct
+
+        const generated = await generateInvoiceImage(order, settings, targetProduct)
+        if (!isMounted) return
+
+        setInvoiceData(generated)
+        setGenerating(false)
+
+        // Automatically trigger image download on confirmation
+        if (autoPrint && !downloadTriggeredRef.current && generated?.dataUrl) {
+          downloadTriggeredRef.current = true
+          setTimeout(() => {
+            const link = document.createElement('a')
+            link.href = generated.dataUrl
+            link.download = generated.filename
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+
+            setImageDownloaded(true)
+            setTimeout(() => setImageDownloaded(false), 5000)
+          }, 300)
+        }
+      } catch (err) {
+        console.error('Error generating invoice image:', err)
+        if (isMounted) setGenerating(false)
       }
-    } catch (err) {
-      console.error('Error generating invoice image:', err)
     }
-  }, [isOpen, order, settings, autoPrint])
+
+    buildInvoice()
+
+    return () => {
+      isMounted = false
+    }
+  }, [isOpen, order, settings, product, products, autoPrint])
 
   if (!isOpen || !order) return null
 
   // Manual download handler
-  const handleDownload = () => {
-    downloadInvoiceImage(order, settings)
+  const handleDownload = async () => {
+    if (invoiceData?.dataUrl && invoiceData?.filename) {
+      const link = document.createElement('a')
+      link.href = invoiceData.dataUrl
+      link.download = invoiceData.filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    } else {
+      await downloadInvoiceImage(order, settings, resolvedProductRef.current)
+    }
     setImageDownloaded(true)
     setTimeout(() => setImageDownloaded(false), 5000)
   }
@@ -189,8 +252,9 @@ export default function InvoiceModal({ isOpen, order, settings, autoPrint = fals
               />
             </div>
           ) : (
-            <div className="py-20 text-center text-xs text-slate-400">
-              Generating official invoice image...
+            <div className="py-24 text-center text-xs text-slate-500 flex flex-col items-center justify-center gap-3">
+              <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              <span className="font-semibold text-slate-600">Generating official invoice with item images...</span>
             </div>
           )}
         </div>

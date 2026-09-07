@@ -8,7 +8,91 @@
  * with ZERO external libraries, zero CDN dependencies, and zero popup blocking.
  */
 
-export function generateInvoiceImage(order, settings = {}) {
+// Image Loader with CORS & 3s timeout
+function loadAnonymousImage(url, timeoutMs = 3000) {
+  return new Promise((resolve) => {
+    if (!url || typeof url !== 'string' || !url.trim()) {
+      return resolve(null)
+    }
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    let timer = setTimeout(() => {
+      resolve(null)
+    }, timeoutMs)
+
+    img.onload = () => {
+      clearTimeout(timer)
+      resolve(img)
+    }
+    img.onerror = () => {
+      clearTimeout(timer)
+      resolve(null)
+    }
+    img.src = url.trim()
+  })
+}
+
+// Draw rounded rectangle helper
+function drawRoundedRect(ctx, x, y, width, height, radius = 6) {
+  if (ctx.roundRect) {
+    ctx.beginPath()
+    ctx.roundRect(x, y, width, height, radius)
+  } else {
+    ctx.beginPath()
+    ctx.moveTo(x + radius, y)
+    ctx.lineTo(x + width - radius, y)
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius)
+    ctx.lineTo(x + width, y + height - radius)
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height)
+    ctx.lineTo(x + radius, y + height)
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius)
+    ctx.lineTo(x, y + radius)
+    ctx.quadraticCurveTo(x, y, x + radius, y)
+    ctx.closePath()
+  }
+}
+
+// Draw cover/aspect clipped thumbnail
+function drawClippedThumbnail(ctx, img, x, y, size, radius = 5) {
+  if (!img) return
+  ctx.save()
+  drawRoundedRect(ctx, x, y, size, size, radius)
+  ctx.clip()
+
+  const imgW = img.naturalWidth || img.width || size
+  const imgH = img.naturalHeight || img.height || size
+  let drawW = size
+  let drawH = size
+  let offsetX = x
+  let offsetY = y
+
+  if (imgW > imgH) {
+    drawH = size
+    drawW = (imgW / imgH) * size
+    offsetX = x - (drawW - size) / 2
+  } else {
+    drawW = size
+    drawH = (imgH / imgW) * size
+    offsetY = y - (drawH - size) / 2
+  }
+
+  try {
+    ctx.drawImage(img, offsetX, offsetY, drawW, drawH)
+  } catch (e) {
+    console.warn('Could not draw thumbnail on canvas:', e)
+  }
+  ctx.restore()
+
+  // Border outline around thumbnail
+  ctx.save()
+  drawRoundedRect(ctx, x, y, size, size, radius)
+  ctx.strokeStyle = '#cbd5e1'
+  ctx.lineWidth = 1
+  ctx.stroke()
+  ctx.restore()
+}
+
+export async function generateInvoiceImage(order, settings = {}, product = null, skipImages = false) {
   if (!order) return null
 
   // Date formatting DD-MM-YYYY
@@ -216,7 +300,7 @@ export function generateInvoiceImage(order, settings = {}) {
   ctx.textAlign = 'right'
   ctx.fillText('AMOUNT', boxRight - 12, tableTopY + 15)
 
-  // Row 1: Product description
+  // Row 1: Product description & Images
   const row1Y = tableTopY + tableHeaderH
 
   // Parse variant items if multi-item or single item
@@ -229,28 +313,108 @@ export function generateInvoiceImage(order, settings = {}) {
     }
   }
 
-  const row1H = variantLines.length > 0 ? 20 + variantLines.length * 14 : 23
+  // Extract candidate image URLs from product & order
+  const candidateUrls = []
+  const prodImages = []
+  if (product) {
+    if (product.image_urls && Array.isArray(product.image_urls)) {
+      prodImages.push(...product.image_urls.filter(Boolean))
+    }
+    if (product.image_url && !prodImages.includes(product.image_url)) {
+      prodImages.push(product.image_url)
+    }
+  }
+  if (order.product_image && !prodImages.includes(order.product_image)) {
+    prodImages.push(order.product_image)
+  }
 
+  // Check if variant lines specify specific colors
+  const bnToEn = { '১': 1, '২': 2, '৩': 3, '৪': 4, '৫': 5, '৬': 6, '৭': 7, '৮': 8, '৯': 9 }
+  if (variantLines.length > 0 && prodImages.length > 0) {
+    variantLines.forEach((line) => {
+      let colorIdx = null
+      const bnMatch = line.match(/কালার\s*(?:#|:)?\s*([১-৯\d]+)/i)
+      if (bnMatch) {
+        const raw = bnMatch[1]
+        const num = bnToEn[raw] || parseInt(raw, 10)
+        if (!isNaN(num) && num > 0) colorIdx = num - 1
+      }
+      if (colorIdx === null) {
+        const enMatch = line.match(/Color\s*(?:#|:)?\s*(\d+)/i)
+        if (enMatch) {
+          const num = parseInt(enMatch[1], 10)
+          if (!isNaN(num) && num > 0) colorIdx = num - 1
+        }
+      }
+
+      if (colorIdx !== null && prodImages[colorIdx]) {
+        if (!candidateUrls.includes(prodImages[colorIdx])) {
+          candidateUrls.push(prodImages[colorIdx])
+        }
+      }
+    })
+  }
+
+  // If no variant-specific color match found, use primary product image
+  if (candidateUrls.length === 0 && prodImages.length > 0) {
+    candidateUrls.push(prodImages[0])
+  }
+
+  // Limit to max 3 images to keep table neat
+  const urlsToLoad = candidateUrls.slice(0, 3)
+
+  let loadedImages = []
+  if (!skipImages && urlsToLoad.length > 0) {
+    try {
+      const results = await Promise.all(urlsToLoad.map((url) => loadAnonymousImage(url, 2500)))
+      loadedImages = results.filter(Boolean)
+    } catch (err) {
+      console.warn('Error loading invoice product images:', err)
+      loadedImages = []
+    }
+  }
+
+  const hasThumbnails = loadedImages.length > 0
+  const thumbSize = loadedImages.length > 1 ? 42 : 46
+  const thumbGap = 5
+  const thumbAreaW = hasThumbnails ? loadedImages.length * (thumbSize + thumbGap) - thumbGap : 0
+  const textStartX = hasThumbnails ? boxX + 12 + thumbAreaW + 10 : boxX + 12
+
+  const minRowH = hasThumbnails ? thumbSize + 14 : 23
+  const textH = 20 + variantLines.length * 15
+  const row1H = Math.max(minRowH, textH)
+
+  // Draw thumbnails
+  if (hasThumbnails) {
+    const thumbY = row1Y + Math.round((row1H - thumbSize) / 2)
+    loadedImages.forEach((img, idx) => {
+      const imgX = boxX + 12 + idx * (thumbSize + thumbGap)
+      drawClippedThumbnail(ctx, img, imgX, thumbY, thumbSize, 5)
+    })
+  }
+
+  // Draw product title & quantity
   ctx.fillStyle = '#000000'
   ctx.font = 'bold 11px Arial, Helvetica, sans-serif'
   ctx.textAlign = 'left'
-  ctx.fillText(`${order.product_name} × ${quantity}`, boxX + 12, row1Y + 15)
+  ctx.fillText(`${order.product_name} × ${quantity}`, textStartX, row1Y + 16)
 
+  // Draw variant details
   if (variantLines.length > 0) {
     ctx.font = '9.5px Arial, Helvetica, sans-serif'
     ctx.fillStyle = '#444444'
     variantLines.forEach((vLine, idx) => {
-      ctx.fillText(vLine, boxX + 16, row1Y + 28 + idx * 14)
+      ctx.fillText(vLine, textStartX, row1Y + 31 + idx * 14)
     })
   }
 
   ctx.font = '11px Arial, Helvetica, sans-serif'
   ctx.fillStyle = '#000000'
   ctx.textAlign = 'center'
-  ctx.fillText('-', (colTaxedX + colAmountX) / 2, row1Y + 15)
+  ctx.fillText('-', (colTaxedX + colAmountX) / 2, row1Y + 16)
 
   ctx.textAlign = 'right'
-  ctx.fillText(productSubtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), boxRight - 12, row1Y + 15)
+  ctx.fillText(productSubtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), boxRight - 12, row1Y + 16)
 
   ctx.beginPath()
   ctx.moveTo(boxX, row1Y + row1H)
@@ -479,8 +643,17 @@ export function generateInvoiceImage(order, settings = {}) {
   ctx.textAlign = 'right'
   ctx.fillText('Web Template by Md. Asif Jahan', boxRight - 12, note3Y + 23)
 
-  // Output image data
-  const dataUrl = canvas.toDataURL('image/png')
+  // Output image data safely
+  let dataUrl = ''
+  try {
+    dataUrl = canvas.toDataURL('image/png')
+  } catch (canvasErr) {
+    console.warn('Canvas toDataURL security error (tainted image). Redrawing without images:', canvasErr)
+    if (!skipImages) {
+      return generateInvoiceImage(order, settings, product, true /* skipImages */)
+    }
+  }
+
   const filename = `Invoice-${invoiceNumber}.png`
 
   return {
@@ -495,9 +668,9 @@ export function generateInvoiceImage(order, settings = {}) {
 /**
  * Downloads the official Invoice image directly to user's device
  */
-export function downloadInvoiceImage(order, settings = {}) {
-  const invoice = generateInvoiceImage(order, settings)
-  if (!invoice) return null
+export async function downloadInvoiceImage(order, settings = {}, product = null) {
+  const invoice = await generateInvoiceImage(order, settings, product)
+  if (!invoice || !invoice.dataUrl) return null
 
   const link = document.createElement('a')
   link.href = invoice.dataUrl

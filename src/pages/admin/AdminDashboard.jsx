@@ -277,7 +277,7 @@ export default function AdminDashboard() {
             <Analytics orders={orders} products={products} />
           )}
           {activeTab === 'orders' && (
-            <OrderManager orders={orders} settings={settings} onOrderUpdate={fetchDashboardData} />
+            <OrderManager orders={orders} products={products} settings={settings} onOrderUpdate={fetchDashboardData} />
           )}
           {activeTab === 'products' && (
             <ProductManager products={products} onProductUpdate={fetchDashboardData} />

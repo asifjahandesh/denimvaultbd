@@ -3,7 +3,7 @@ import { supabase } from '../../supabase'
 import { Search, Filter, Phone, MapPin, Calendar, Clock, ShoppingCart, User, AlertCircle, Trash2, FileText, Printer, Check } from 'lucide-react'
 import InvoiceModal from '../../components/admin/InvoiceModal'
 
-export default function OrderManager({ orders, settings, onOrderUpdate }) {
+export default function OrderManager({ orders, products = [], settings, onOrderUpdate }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [selectedOrder, setSelectedOrder] = useState(null)
@@ -13,6 +13,49 @@ export default function OrderManager({ orders, settings, onOrderUpdate }) {
   // Invoice Modal State
   const [invoiceOrder, setInvoiceOrder] = useState(null)
   const [autoPrintInvoice, setAutoPrintInvoice] = useState(false)
+
+  // Helper to match order with product
+  const findProductForOrder = (order) => {
+    if (!order) return null
+    if (order.product_id) {
+      const p = products.find((prod) => prod.id === order.product_id)
+      if (p) return p
+    }
+    if (order.product_name) {
+      const trimmed = order.product_name.trim().toLowerCase()
+      const match = products.find((prod) => (prod.name || '').trim().toLowerCase() === trimmed)
+      if (match) return match
+      return products.find((prod) => (prod.name || '').trim().toLowerCase().includes(trimmed) || trimmed.includes((prod.name || '').trim().toLowerCase()))
+    }
+    return null
+  }
+
+  // Helper to get thumbnail image URL for an order
+  const getProductThumbnail = (order) => {
+    if (!order) return null
+    const prod = findProductForOrder(order)
+    if (prod?.image_urls && Array.isArray(prod.image_urls) && prod.image_urls.length > 0) {
+      // Check if order variant specifies a specific color
+      if (order.product_variant) {
+        const bnToEn = { '১': 1, '২': 2, '৩': 3, '৪': 4, '৫': 5, '৬': 6, '৭': 7, '৮': 8, '৯': 9 }
+        const bnMatch = order.product_variant.match(/কালার\s*(?:#|:)?\s*([১-৯\d]+)/i)
+        const enMatch = order.product_variant.match(/Color\s*(?:#|:)?\s*(\d+)/i)
+        let idx = null
+        if (bnMatch) {
+          const num = bnToEn[bnMatch[1]] || parseInt(bnMatch[1], 10)
+          if (!isNaN(num) && num > 0) idx = num - 1
+        } else if (enMatch) {
+          const num = parseInt(enMatch[1], 10)
+          if (!isNaN(num) && num > 0) idx = num - 1
+        }
+        if (idx !== null && prod.image_urls[idx]) {
+          return prod.image_urls[idx]
+        }
+      }
+      return prod.image_urls[0]
+    }
+    return prod?.image_url || order.product_image || null
+  }
 
   // Filter and search orders
   const filteredOrders = useMemo(() => {
@@ -195,10 +238,29 @@ export default function OrderManager({ orders, settings, onOrderUpdate }) {
                         </p>
                       </td>
                       <td class="py-3.5 pr-4">
-                        <p class="font-bold text-slate-800">{order.product_name}</p>
-                        <p class="text-[10px] text-slate-500">
-                          {order.product_variant ? `Variant: ${order.product_variant} | ` : ''} Qty: {order.quantity}
-                        </p>
+                        <div class="flex items-center gap-2.5">
+                          {(() => {
+                            const thumb = getProductThumbnail(order)
+                            return thumb ? (
+                              <img
+                                src={thumb}
+                                alt={order.product_name}
+                                className="w-10 h-10 rounded-xl object-cover border border-slate-200 shrink-0 bg-white shadow-2xs"
+                                onError={(e) => { e.currentTarget.style.display = 'none' }}
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0 text-slate-400 border border-slate-200/60">
+                                <ShoppingCart size={15} />
+                              </div>
+                            )
+                          })()}
+                          <div className="min-w-0">
+                            <p class="font-bold text-slate-800 line-clamp-1">{order.product_name}</p>
+                            <p class="text-[10px] text-slate-500">
+                              {order.product_variant ? `Variant: ${order.product_variant} | ` : ''} Qty: {order.quantity}
+                            </p>
+                          </div>
+                        </div>
                       </td>
                       <td class="py-3.5 pr-4 font-extrabold text-slate-800">
                         ৳{order.total_price}
@@ -364,16 +426,35 @@ export default function OrderManager({ orders, settings, onOrderUpdate }) {
                   </div>
                 </div>
 
-                <div class="flex items-start gap-2.5">
-                  <ShoppingCart size={14} className="text-slate-400 mt-0.5" />
-                  <div>
-                    <p class="font-bold text-slate-800">
-                      {selectedOrder.product_name} ({selectedOrder.quantity} pcs)
+                <div class="flex items-start gap-3 rounded-2xl bg-slate-50 p-3 border border-slate-100">
+                  {(() => {
+                    const thumb = getProductThumbnail(selectedOrder)
+                    return thumb ? (
+                      <img
+                        src={thumb}
+                        alt={selectedOrder.product_name}
+                        className="w-14 h-14 rounded-xl object-cover border border-slate-200 shrink-0 shadow-xs bg-white"
+                        onError={(e) => { e.currentTarget.style.display = 'none' }}
+                      />
+                    ) : (
+                      <div className="w-14 h-14 rounded-xl bg-slate-200/60 flex items-center justify-center shrink-0 text-slate-400">
+                        <ShoppingCart size={20} />
+                      </div>
+                    )
+                  })()}
+                  <div className="min-w-0 flex-1">
+                    <p class="font-bold text-slate-900 text-xs leading-snug">
+                      {selectedOrder.product_name}
+                    </p>
+                    <p className="text-[11px] font-semibold text-slate-700 mt-1">
+                      Quantity: <span className="font-extrabold text-rose-600">{selectedOrder.quantity} pcs</span>
                     </p>
                     {selectedOrder.product_variant && (
-                      <p class="text-[10px] text-slate-500">Variant: {selectedOrder.product_variant}</p>
+                      <div className="text-[10px] text-slate-600 mt-1.5 bg-white rounded-lg px-2 py-1 border border-slate-200/80 font-medium">
+                        {selectedOrder.product_variant}
+                      </div>
                     )}
-                    <p class="text-[10px] text-slate-400">Ordered Product</p>
+                    <p class="text-[9px] text-slate-400 mt-1">Ordered Product & Variant</p>
                   </div>
                 </div>
 
@@ -445,10 +526,12 @@ export default function OrderManager({ orders, settings, onOrderUpdate }) {
         </div>
       </div>
 
-      {/* Official PDF Invoice Modal */}
+      {/* Official Invoice Modal */}
       <InvoiceModal
         isOpen={!!invoiceOrder}
         order={invoiceOrder}
+        product={findProductForOrder(invoiceOrder)}
+        products={products}
         settings={settings}
         autoPrint={autoPrintInvoice}
         onClose={() => {
