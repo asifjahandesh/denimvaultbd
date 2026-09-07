@@ -322,6 +322,21 @@ ${confirmPrompt}`
 
       if (orderError) throw orderError
 
+      // 1.1 Dispatch background push notification to Admin devices (PC & Mobile)
+      fetch('/api/send-order-push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_name: name,
+          phone: phone,
+          address: formattedAddress,
+          product_name: product.name,
+          product_variant: orderVariant,
+          quantity: quantity,
+          total_price: totalAmount
+        })
+      }).catch((err) => console.warn('Push notification trigger failed:', err))
+
       // 2. Reduce product stock and specific size stock
       const updatedSizeStock = { ...sizeStock }
       if (selectedSize && updatedSizeStock[selectedSize] !== undefined) {

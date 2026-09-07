@@ -1,13 +1,18 @@
 import React, { useState, useMemo } from 'react'
 import { supabase } from '../../supabase'
-import { Search, Filter, Phone, MapPin, Calendar, Clock, ShoppingCart, User, AlertCircle, Trash2 } from 'lucide-react'
+import { Search, Filter, Phone, MapPin, Calendar, Clock, ShoppingCart, User, AlertCircle, Trash2, FileText, Printer } from 'lucide-react'
+import InvoiceModal from '../../components/admin/InvoiceModal'
 
-export default function OrderManager({ orders, onOrderUpdate }) {
+export default function OrderManager({ orders, settings, onOrderUpdate }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [customerHistory, setCustomerHistory] = useState([])
   const [historyLoading, setHistoryLoading] = useState(false)
+
+  // Invoice Modal State
+  const [invoiceOrder, setInvoiceOrder] = useState(null)
+  const [autoPrintInvoice, setAutoPrintInvoice] = useState(false)
 
   // Filter and search orders
   const filteredOrders = useMemo(() => {
@@ -37,6 +42,15 @@ export default function OrderManager({ orders, onOrderUpdate }) {
       // Update local selected order view if open
       if (selectedOrder && selectedOrder.id === orderId) {
         setSelectedOrder({ ...selectedOrder, status: newStatus })
+      }
+
+      // Auto-generate and open official PDF invoice when order is confirmed!
+      if (newStatus === 'confirmed') {
+        const targetOrder = orders.find((o) => o.id === orderId) || (selectedOrder && selectedOrder.id === orderId ? selectedOrder : null)
+        if (targetOrder) {
+          setInvoiceOrder({ ...targetOrder, status: 'confirmed' })
+          setAutoPrintInvoice(true)
+        }
       }
     } catch (err) {
       console.error('Error updating status:', err)
@@ -203,6 +217,18 @@ export default function OrderManager({ orders, onOrderUpdate }) {
                       </td>
                       <td class="py-3.5 pr-4 text-right" onClick={(e) => e.stopPropagation()}>
                         <div class="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setInvoiceOrder(order)
+                              setAutoPrintInvoice(false)
+                            }}
+                            class="rounded-xl border border-slate-200 bg-white p-1.5 text-slate-500 hover:border-slate-300 hover:bg-slate-50 hover:text-rose-600 transition-colors"
+                            title="View / Print Official Invoice"
+                          >
+                            <FileText size={13} />
+                          </button>
                           <select
                             value={order.status}
                             onChange={(e) => handleStatusChange(order.id, e.target.value)}
@@ -268,6 +294,19 @@ export default function OrderManager({ orders, onOrderUpdate }) {
                   <option value="cancelled">Cancelled</option>
                 </select>
               </div>
+
+              {/* Print Official Invoice Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setInvoiceOrder(selectedOrder)
+                  setAutoPrintInvoice(false)
+                }}
+                className="flex items-center justify-center gap-2 w-full rounded-xl border border-blue-200 bg-blue-50/80 hover:bg-blue-100/80 px-4 py-2 text-xs font-bold text-blue-700 transition-colors shadow-xs"
+              >
+                <Printer size={14} />
+                <span>View & Print Official Invoice</span>
+              </button>
 
               {/* Customer Details */}
               <div class="space-y-3.5 text-xs">
@@ -377,6 +416,18 @@ export default function OrderManager({ orders, onOrderUpdate }) {
           )}
         </div>
       </div>
+
+      {/* Official PDF Invoice Modal */}
+      <InvoiceModal
+        isOpen={!!invoiceOrder}
+        order={invoiceOrder}
+        settings={settings}
+        autoPrint={autoPrintInvoice}
+        onClose={() => {
+          setInvoiceOrder(null)
+          setAutoPrintInvoice(false)
+        }}
+      />
     </div>
   )
 }

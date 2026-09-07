@@ -131,6 +131,13 @@ begin
     when duplicate_object then null;
     when others then null;
   end;
+
+  begin
+    alter publication supabase_realtime add table public.orders;
+  exception
+    when duplicate_object then null;
+    when others then null;
+  end;
 end $$;
 
 

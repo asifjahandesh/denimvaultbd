@@ -8,7 +8,8 @@ import InventoryManager from './InventoryManager'
 import SettingsManager from './SettingsManager'
 import ReviewManager from './ReviewManager'
 import Logo from '../../components/Logo'
-import { BarChart3, ShoppingCart, Package, Boxes, Settings, LogOut, Menu, X, ShieldAlert, MessageSquare } from 'lucide-react'
+import { BarChart3, ShoppingCart, Package, Boxes, Settings, LogOut, Menu, X, ShieldAlert, MessageSquare, ShoppingBag } from 'lucide-react'
+import { registerServiceWorker, playOrderAlertChime } from '../../utils/pushManager'
 
 export default function AdminDashboard() {
   // Authentication is kept purely in-memory (React state).
@@ -21,6 +22,7 @@ export default function AdminDashboard() {
   const [products, setProducts] = useState([])
   const [settings, setSettings] = useState({})
   const [dataLoading, setDataLoading] = useState(false)
+  const [orderAlert, setOrderAlert] = useState({ visible: false, customer: '', total: 0, product: '' })
 
   // Mobile Menu State
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -61,6 +63,41 @@ export default function AdminDashboard() {
       setDataLoading(false)
     }
   }
+
+  // Realtime order listener & Service Worker initialization
+  useEffect(() => {
+    if (!isAuthenticated) return
+
+    // Register service worker for background push
+    registerServiceWorker().catch(() => {})
+
+    // Realtime channel for instant in-tab order alerts
+    const channel = supabase
+      .channel('admin:realtime-orders')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'orders' },
+        (payload) => {
+          const newOrder = payload.new || {}
+          playOrderAlertChime()
+          fetchDashboardData()
+          setOrderAlert({
+            visible: true,
+            customer: newOrder.customer_name || 'Customer',
+            total: newOrder.total_price || 0,
+            product: newOrder.product_name || 'Product'
+          })
+          setTimeout(() => {
+            setOrderAlert((prev) => ({ ...prev, visible: false }))
+          }, 7000)
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [isAuthenticated])
 
   const handleLoginSuccess = () => {
     setIsAuthenticated(true)
@@ -199,13 +236,48 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {/* Live Order Incoming Toast Alert */}
+        {orderAlert.visible && (
+          <div className="fixed top-20 right-4 z-50 flex items-center gap-3 rounded-2xl bg-slate-900 text-white p-4 shadow-2xl border border-slate-800 max-w-sm">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-500 text-white shadow-md shadow-rose-900/50">
+              <ShoppingBag size={20} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-xs font-black text-rose-400">🛍️ NEW ORDER RECEIVED!</span>
+                <span className="text-xs font-bold text-white">৳{Number(orderAlert.total).toLocaleString('en-US')}</span>
+              </div>
+              <p className="text-[11px] text-slate-300 truncate mt-0.5 font-medium">
+                {orderAlert.customer} &bull; {orderAlert.product}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('orders')
+                  setOrderAlert((prev) => ({ ...prev, visible: false }))
+                }}
+                className="text-[10px] text-rose-400 hover:text-rose-300 font-bold underline mt-1 block"
+              >
+                View in Orders Tab &rarr;
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOrderAlert((prev) => ({ ...prev, visible: false }))}
+              className="p-1 text-slate-400 hover:text-white"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
+
         {/* Dynamic Tab Body */}
         <main class="flex-1 p-4 md:p-6 max-w-6xl w-full mx-auto pb-16">
           {activeTab === 'analytics' && (
             <Analytics orders={orders} products={products} />
           )}
           {activeTab === 'orders' && (
-            <OrderManager orders={orders} onOrderUpdate={fetchDashboardData} />
+            <OrderManager orders={orders} settings={settings} onOrderUpdate={fetchDashboardData} />
           )}
           {activeTab === 'products' && (
             <ProductManager products={products} onProductUpdate={fetchDashboardData} />
