@@ -218,29 +218,48 @@ export function generateInvoiceImage(order, settings = {}) {
 
   // Row 1: Product description
   const row1Y = tableTopY + tableHeaderH
-  const rowH = 23
+
+  // Parse variant items if multi-item or single item
+  const variantLines = []
+  if (order.product_variant) {
+    if (order.product_variant.includes(' + ')) {
+      order.product_variant.split(' + ').forEach((part) => variantLines.push(part.trim()))
+    } else {
+      variantLines.push(order.product_variant)
+    }
+  }
+
+  const row1H = variantLines.length > 0 ? 20 + variantLines.length * 14 : 23
 
   ctx.fillStyle = '#000000'
   ctx.font = 'bold 11px Arial, Helvetica, sans-serif'
   ctx.textAlign = 'left'
-  const prodDesc = `${order.product_name}${order.product_variant ? ` (${order.product_variant})` : ''} × ${quantity}`
-  const displayProdDesc = prodDesc.length > 70 ? prodDesc.slice(0, 70) + '...' : prodDesc
-  ctx.fillText(displayProdDesc, boxX + 12, row1Y + 16)
+  ctx.fillText(`${order.product_name} × ${quantity}`, boxX + 12, row1Y + 15)
+
+  if (variantLines.length > 0) {
+    ctx.font = '9.5px Arial, Helvetica, sans-serif'
+    ctx.fillStyle = '#444444'
+    variantLines.forEach((vLine, idx) => {
+      ctx.fillText(vLine, boxX + 16, row1Y + 28 + idx * 14)
+    })
+  }
 
   ctx.font = '11px Arial, Helvetica, sans-serif'
+  ctx.fillStyle = '#000000'
   ctx.textAlign = 'center'
-  ctx.fillText('-', (colTaxedX + colAmountX) / 2, row1Y + 16)
+  ctx.fillText('-', (colTaxedX + colAmountX) / 2, row1Y + 15)
 
   ctx.textAlign = 'right'
-  ctx.fillText(productSubtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), boxRight - 12, row1Y + 16)
+  ctx.fillText(productSubtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), boxRight - 12, row1Y + 15)
 
   ctx.beginPath()
-  ctx.moveTo(boxX, row1Y + rowH)
-  ctx.lineTo(boxRight, row1Y + rowH)
+  ctx.moveTo(boxX, row1Y + row1H)
+  ctx.lineTo(boxRight, row1Y + row1H)
   ctx.stroke()
 
   // Row 2: Delivery Charge
-  const row2Y = row1Y + rowH
+  const rowH = 23
+  const row2Y = row1Y + row1H
   ctx.textAlign = 'left'
   const deliveryLabel = `Delivery Charge ${deliveryCharge === 0 ? '(Free Delivery Promotion)' : '(Standard Shipping)'}`
   ctx.fillText(deliveryLabel, boxX + 12, row2Y + 16)

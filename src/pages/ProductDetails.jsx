@@ -4,7 +4,7 @@ import { supabase } from '../supabase'
 import Header from '../components/Header'
 import Footer from '../components/Footer'
 import FloatingWidgets from '../components/FloatingWidgets'
-import { ArrowLeft, ShoppingBag, ShieldCheck, Truck, Check, MessageSquare, AlertTriangle, Layers, Tag, MapPin, Palette, AlertCircle } from 'lucide-react'
+import { ArrowLeft, ShoppingBag, ShieldCheck, Truck, Check, MessageSquare, AlertTriangle, Layers, Tag, MapPin, Palette, AlertCircle, Plus, Trash2 } from 'lucide-react'
 import { translations } from '../utils/translations'
 import confetti from 'canvas-confetti'
 import {
@@ -41,22 +41,71 @@ export default function ProductDetails({ lang = 'bn', setLang }) {
     return []
   }, [product])
 
-  const [selectedColors, setSelectedColors] = useState([0])
+  // Independent multi-item order state (each item can have its own color and size)
+  const [orderItems, setOrderItems] = useState([
+    { id: 1, colorIndex: 0, size: '' }
+  ])
 
-  const toggleColor = (idx) => {
-    setSelectedColors((prev) => {
-      let next
-      if (prev.includes(idx)) {
-        next = prev.filter((i) => i !== idx)
-      } else {
-        next = [...prev, idx].sort((a, b) => a - b)
+  // Total quantity is strictly the count of ordered items
+  const quantity = orderItems.length
+
+  const handleAddItem = (preferredColorIdx = 0) => {
+    let nextColorIdx = preferredColorIdx
+    if (productImages.length > 1) {
+      const usedColors = orderItems.map((i) => i.colorIndex)
+      const unused = productImages.map((_, i) => i).find((i) => !usedColors.includes(i))
+      if (unused !== undefined) nextColorIdx = unused
+    }
+    const { availableSizes } = product ? parseProductSizes(product) : { availableSizes: [] }
+    const newItem = {
+      id: Date.now() + Math.random(),
+      colorIndex: nextColorIdx,
+      size: availableSizes.length > 0 ? availableSizes[0] : ''
+    }
+    setOrderItems((prev) => [...prev, newItem])
+    setActiveImageIndex(nextColorIdx)
+    setOrderError('')
+  }
+
+  const handleRemoveItem = (itemId) => {
+    if (orderItems.length <= 1) return
+    setOrderItems((prev) => prev.filter((i) => i.id !== itemId))
+    setOrderError('')
+  }
+
+  const handleItemSizeChange = (itemId, newSize) => {
+    setOrderItems((prev) =>
+      prev.map((i) => (i.id === itemId ? { ...i, size: newSize } : i))
+    )
+    setOrderError('')
+  }
+
+  const handleItemColorChange = (itemId, newColorIdx) => {
+    setOrderItems((prev) =>
+      prev.map((i) => (i.id === itemId ? { ...i, colorIndex: newColorIdx } : i))
+    )
+    setActiveImageIndex(newColorIdx)
+  }
+
+  const handleToggleColorFromPalette = (colorIdx) => {
+    setActiveImageIndex(colorIdx)
+    const { availableSizes } = product ? parseProductSizes(product) : { availableSizes: [] }
+    const existingIndex = orderItems.findIndex((item) => item.colorIndex === colorIdx)
+    if (existingIndex !== -1) {
+      if (orderItems.length > 1) {
+        setOrderItems((prev) => prev.filter((_, idx) => idx !== existingIndex))
       }
-      // Each selected color counts as an item; auto-sync quantity
-      const targetCount = Math.max(1, next.length)
-      setQuantity(targetCount)
-      return next
-    })
-    setActiveImageIndex(idx)
+    } else {
+      setOrderItems((prev) => [
+        ...prev,
+        {
+          id: Date.now() + Math.random(),
+          colorIndex: colorIdx,
+          size: availableSizes.length > 0 ? availableSizes[0] : ''
+        }
+      ])
+    }
+    setOrderError('')
   }
 
   // Checkout Form State
@@ -66,8 +115,6 @@ export default function ProductDetails({ lang = 'bn', setLang }) {
   const [upazila, setUpazila] = useState('')
   const [thana, setThana] = useState('')
   const [addressLine, setAddressLine] = useState('')
-  const [selectedSize, setSelectedSize] = useState('')
-  const [quantity, setQuantity] = useState(1)
   const [notes, setNotes] = useState('')
 
   // Bangladesh geographic dropdown options
@@ -105,7 +152,9 @@ export default function ProductDetails({ lang = 'bn', setLang }) {
 
       const { availableSizes } = parseProductSizes(productData)
       if (availableSizes.length > 0) {
-        setSelectedSize(availableSizes[0])
+        setOrderItems([
+          { id: 1, colorIndex: 0, size: availableSizes[0] }
+        ])
       }
 
       // 2. Fetch settings
@@ -170,19 +219,15 @@ export default function ProductDetails({ lang = 'bn', setLang }) {
 
   // Sizing & Category breakdown
   const { cleanDescription, sizeStock, category: itemCategory, allSizes, availableSizes, isFreeDelivery, entryStock } = parseProductSizes(product)
+  const hasConfiguredSizes = allSizes && allSizes.length > 0
 
   // Price & Stock logic
   const hasDiscount = product.discount_price && product.discount_price < product.price
   const unitPrice = product.discount_price || product.price
   const discountAmount = hasDiscount ? product.price - product.discount_price : 0
 
-  const currentSizeStock = selectedSize && sizeStock[selectedSize] !== undefined
-    ? Number(sizeStock[selectedSize])
-    : product.stock
-
   const isOutOfStock = availableSizes.length > 0 ? availableSizes.length === 0 : product.stock <= 0
-  const isSelectedSizeOutOfStock = selectedSize ? currentSizeStock <= 0 : isOutOfStock
-  const isLowStock = currentSizeStock > 0 && currentSizeStock <= 5
+  const isLowStock = product.stock > 0 && product.stock <= 5
 
   // Delivery charge calculation: 0 if isFreeDelivery is true, otherwise 120 Tk flat
   const currentDeliveryCharge = isFreeDelivery ? 0 : 120
@@ -228,12 +273,17 @@ export default function ProductDetails({ lang = 'bn', setLang }) {
     const notesLabel = lang === 'bn' ? 'নোট' : 'Notes'
     const confirmPrompt = t.whatsappMessageConfirmPrompt
 
-    const sizeText = selectedSize ? `Size: ${selectedSize}` : ''
-    const colorText = (selectedColors.length > 0 && productImages.length > 0)
-      ? `${t.colorItem}: ${selectedColors.map(idx => `${t.colorItem} ${idx + 1}`).join(', ')}`
-      : ''
-    const variantParts = [sizeText, colorText].filter(Boolean)
-    const variantText = variantParts.join(' | ')
+    // Itemized variant breakdown
+    const itemsDescription = orderItems
+      .map((item, idx) => {
+        const itemColor = productImages.length > 1 ? `${t.colorItem} ${item.colorIndex + 1}` : ''
+        const itemSize = item.size ? `Size: ${item.size}` : ''
+        const itemSpec = [itemColor, itemSize].filter(Boolean).join(', ')
+        return orderItems.length > 1
+          ? `• ${t.itemLabel || (lang === 'bn' ? 'আইটেম' : 'Item')} ${idx + 1}: ${itemSpec}`
+          : itemSpec
+      })
+      .join('\n')
 
     const formattedAddress = formatFullAddress({
       addressLine,
@@ -248,7 +298,7 @@ export default function ProductDetails({ lang = 'bn', setLang }) {
 ${orderDetailsLabel}
 -------------------------
 ${productLabel}: ${product.name}
-${variantText ? `${variantLabel}: ${variantText}\n` : ''}${qtyLabel}: ${quantity} ${lang === 'bn' ? 'টি' : 'pcs'}
+${itemsDescription ? `${variantLabel}:\n${itemsDescription}\n` : ''}${qtyLabel}: ${quantity} ${lang === 'bn' ? 'টি' : 'pcs'}
 ${totalLabel}: ৳${totalAmount} ${shippingLabel}
 
 ${customerInfoLabel}
@@ -302,20 +352,33 @@ ${confirmPrompt}`
       lang
     })
     
-    // Size Selection Validation
-    if (availableSizes.length > 0 && !selectedSize) {
-      setOrderError(lang === 'bn' ? 'অনুগ্রহ করে অর্ডার করার জন্য একটি সাইজ নির্বাচন করুন' : 'Please select an available size before ordering')
-      const sizeEl = document.getElementById('size-selector-area')
-      if (sizeEl) sizeEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      return
+    // Size Selection Validation for all items
+    if (availableSizes.length > 0) {
+      const missingSizeItem = orderItems.find((item) => !item.size)
+      if (missingSizeItem) {
+        setOrderError(lang === 'bn' ? 'অনুগ্রহ করে প্রতিটি আইটেমের জন্য সাইজ নির্বাচন করুন' : 'Please select a size for each item')
+        const sizeEl = document.getElementById('checkout-form')
+        if (sizeEl) sizeEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        return
+      }
     }
 
-    if (selectedSize && sizeStock[selectedSize] !== undefined && sizeStock[selectedSize] < quantity) {
-      return setOrderError(
-        lang === 'bn'
-          ? `সাইজ ${selectedSize}-এর জন্য পর্যাপ্ত স্টক নেই। অনুগ্রহ করে কম পরিমাণ নির্বাচন করুন।`
-          : `Insufficient stock for size ${selectedSize}. Please select a lower quantity.`
-      )
+    // Check stock per size
+    const sizeCounts = {}
+    orderItems.forEach((item) => {
+      if (item.size) {
+        sizeCounts[item.size] = (sizeCounts[item.size] || 0) + 1
+      }
+    })
+
+    for (const [sz, neededQty] of Object.entries(sizeCounts)) {
+      if (sizeStock[sz] !== undefined && sizeStock[sz] < neededQty) {
+        return setOrderError(
+          lang === 'bn'
+            ? `সাইজ ${sz}-এর পর্যাপ্ত স্টক নেই (মওজুদ: ${sizeStock[sz]}টি)।`
+            : `Insufficient stock for size ${sz} (available: ${sizeStock[sz]}).`
+        )
+      }
     }
 
     if (product.stock < quantity) {
@@ -328,15 +391,15 @@ ${confirmPrompt}`
 
     setOrderLoading(true)
 
-    const orderVariantParts = []
-    if (selectedSize) {
-      orderVariantParts.push(`Size: ${selectedSize}`)
-    }
-    if (selectedColors.length > 0 && productImages.length > 0) {
-      const colorLabels = selectedColors.map(idx => `${t.colorItem} ${idx + 1}`).join(', ')
-      orderVariantParts.push(`${t.colorItem}: ${colorLabels}`)
-    }
-    const orderVariant = orderVariantParts.length > 0 ? orderVariantParts.join(' | ') : null
+    // Construct clear variant breakdown for database & invoice
+    const orderVariant = orderItems
+      .map((item, idx) => {
+        const itemColor = productImages.length > 1 ? `${t.colorItem} ${item.colorIndex + 1}` : ''
+        const itemSize = item.size ? `Size: ${item.size}` : ''
+        const parts = [itemColor, itemSize].filter(Boolean).join(', ')
+        return orderItems.length > 1 ? `${t.itemLabel || (lang === 'bn' ? 'আইটেম' : 'Item')} ${idx + 1}: ${parts}` : parts
+      })
+      .join(' + ')
 
     try {
       // 1. Save order to Supabase
@@ -375,9 +438,11 @@ ${confirmPrompt}`
 
       // 2. Reduce product stock and specific size stock
       const updatedSizeStock = { ...sizeStock }
-      if (selectedSize && updatedSizeStock[selectedSize] !== undefined) {
-        updatedSizeStock[selectedSize] = Math.max(0, updatedSizeStock[selectedSize] - quantity)
-      }
+      Object.entries(sizeCounts).forEach(([sz, count]) => {
+        if (updatedSizeStock[sz] !== undefined) {
+          updatedSizeStock[sz] = Math.max(0, updatedSizeStock[sz] - count)
+        }
+      })
       const updatedDescription = encodeProductDescription(cleanDescription, updatedSizeStock, isFreeDelivery, entryStock)
       const newTotalStock = Math.max(0, product.stock - quantity)
 
@@ -546,9 +611,9 @@ ${confirmPrompt}`
                     <Tag size={13} className="text-rose-500" />
                     {t.selectSizeLabel}
                   </span>
-                  {selectedSize && (
+                  {orderItems[0]?.size && (
                     <span class="text-xs font-extrabold text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-lg border border-rose-100">
-                      {t.selectedSize} <span class="font-black text-rose-700">{selectedSize}</span>
+                      {t.selectedSize} <span class="font-black text-rose-700">{orderItems[0].size}</span>
                     </span>
                   )}
                 </div>
@@ -558,7 +623,7 @@ ${confirmPrompt}`
                   {allSizes.map((sz) => {
                     const qty = sizeStock[sz] !== undefined ? Number(sizeStock[sz]) : (hasConfiguredSizes ? 0 : product.stock)
                     const isAvail = qty > 0
-                    const isSelected = selectedSize === sz
+                    const isSelected = orderItems[0]?.size === sz
 
                     return (
                       <button
@@ -566,8 +631,8 @@ ${confirmPrompt}`
                         type="button"
                         disabled={!isAvail}
                         onClick={() => {
-                          if (isAvail) {
-                            setSelectedSize(sz)
+                          if (isAvail && orderItems[0]) {
+                            handleItemSizeChange(orderItems[0].id, sz)
                             setOrderError('')
                           }
                         }}
@@ -609,22 +674,22 @@ ${confirmPrompt}`
                         {t.multiColorHint}
                       </span>
                     </div>
-                    {selectedColors.length > 0 && (
+                    {orderItems.length > 0 && (
                       <span class="text-xs font-black text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-lg border border-rose-100">
-                        {t.colorsCountSelected.replace('{count}', selectedColors.length)}
+                        {quantity} {quantity > 1 ? (lang === 'bn' ? 'টি পণ্য সিলেক্টেড' : 'items selected') : (lang === 'bn' ? '১টি পণ্য' : '1 item')}
                       </span>
                     )}
                   </div>
 
                   <div class="flex flex-wrap gap-3">
                     {productImages.map((img, idx) => {
-                      const isSelected = selectedColors.includes(idx)
+                      const isSelected = orderItems.some((i) => i.colorIndex === idx)
                       return (
                         <button
                           key={idx}
                           type="button"
-                          onClick={() => toggleColor(idx)}
-                          class={`group relative flex items-center gap-2.5 p-2 pr-3.5 rounded-2xl border-2 transition-all text-left ${
+                          onClick={() => handleToggleColorFromPalette(idx)}
+                          class={`group relative flex items-center gap-2.5 p-2 pr-3.5 rounded-2xl border-2 transition-all text-left cursor-pointer ${
                             isSelected
                               ? 'border-rose-500 bg-rose-50/50 shadow-md ring-2 ring-rose-300 scale-105'
                               : 'border-slate-200 bg-white hover:border-rose-300 hover:bg-slate-50 shadow-sm'
@@ -814,145 +879,140 @@ ${confirmPrompt}`
                     </div>
                   </div>
 
-                  {/* Size selection in checkout form */}
-                  {allSizes.length > 0 && (
-                    <div id="size-selector-area" class="scroll-mt-24 space-y-2 rounded-2xl bg-slate-50/70 p-3.5 border border-slate-100">
-                      <div class="flex items-center justify-between">
-                        <label class="block text-xs font-bold text-slate-700">
-                          {t.selectSizeLabel}
-                        </label>
-                        {selectedSize && (
-                          <span class="text-xs font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md">
-                            {t.selectedSize} {selectedSize}
-                          </span>
-                        )}
+                  {/* Order Items Builder: Per-item Size and Color selector */}
+                  <div className="space-y-3 rounded-2xl bg-slate-50/80 p-3.5 border border-slate-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs font-extrabold text-slate-800">
+                        <Layers size={14} className="text-rose-500" />
+                        <span>{t.orderItemsTitle || (lang === 'bn' ? 'অর্ডারের আইটেমসমূহ (সাইজ ও কালার নির্বাচন করুন)' : 'Order Items (Select Size & Color)')}</span>
                       </div>
-                      
-                      <div class="flex flex-wrap gap-2">
-                        {allSizes.map((sz) => {
-                          const qty = sizeStock[sz] !== undefined ? Number(sizeStock[sz]) : (hasConfiguredSizes ? 0 : product.stock)
-                          const isAvail = qty > 0
-                          const isSelected = selectedSize === sz
-
-                          return (
-                            <button
-                              key={sz}
-                              type="button"
-                              disabled={!isAvail}
-                              onClick={() => {
-                                if (isAvail) {
-                                  setSelectedSize(sz)
-                                  setOrderError('')
-                                }
-                              }}
-                              class={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                                isSelected
-                                  ? 'bg-rose-500 text-white shadow-md shadow-rose-200 ring-2 ring-rose-300'
-                                  : isAvail
-                                  ? 'bg-white text-slate-700 hover:bg-rose-50 hover:text-rose-600 border border-slate-200'
-                                  : 'bg-slate-100 text-slate-300 border border-slate-100 cursor-not-allowed line-through opacity-60'
-                              }`}
-                            >
-                              <span>{sz}</span>
-                              {!isAvail && (
-                                <span class="text-[9px] text-slate-400">({t.sizeOutOfStock})</span>
-                              )}
-                            </button>
-                          )
-                        })}
-                      </div>
+                      <span className="text-[11px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100">
+                        {quantity} {lang === 'bn' ? 'টি আইটেম' : 'items'}
+                      </span>
                     </div>
-                  )}
 
-                  {/* Color selection in checkout form */}
-                  {productImages.length > 1 && (
-                    <div class="space-y-2 rounded-2xl bg-slate-50/70 p-3.5 border border-slate-100">
-                      <div class="flex items-center justify-between flex-wrap gap-2">
-                        <div class="flex items-center gap-1.5">
-                          <Palette size={13} className="text-rose-500" />
-                          <label class="block text-xs font-bold text-slate-700">
-                            {t.selectColorLabel}
-                          </label>
-                          <span class="text-[10px] text-slate-400 hidden sm:inline">
-                            {t.multiColorHint}
-                          </span>
-                        </div>
-                        {selectedColors.length > 0 && (
-                          <span class="text-xs font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-100">
-                            {t.colorsCountSelected.replace('{count}', selectedColors.length)}
-                          </span>
-                        )}
-                      </div>
-
-                      <div class="flex flex-wrap gap-2 pt-1">
-                        {productImages.map((img, idx) => {
-                          const isSelected = selectedColors.includes(idx)
-                          return (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() => toggleColor(idx)}
-                              class={`group relative flex items-center gap-2 p-1.5 pr-3 rounded-xl border-2 transition-all text-left ${
-                                isSelected
-                                  ? 'border-rose-500 bg-rose-50/50 shadow-sm ring-1 ring-rose-300'
-                                  : 'border-slate-200 bg-white hover:border-rose-300 hover:bg-slate-50/60'
-                              }`}
-                            >
-                              <div class="relative h-11 w-11 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-100">
+                    {/* Per-item cards */}
+                    <div className="space-y-2.5">
+                      {orderItems.map((item, idx) => (
+                        <div
+                          key={item.id}
+                          className="rounded-2xl border-2 border-rose-100 bg-white p-3.5 shadow-xs transition-all hover:border-rose-200 space-y-2.5"
+                        >
+                          <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                            <div className="flex items-center gap-2.5">
+                              {productImages.length > 0 && (
                                 <img
-                                  src={img}
-                                  alt={`${t.colorItem} ${idx + 1}`}
-                                  class="h-full w-full object-cover group-hover:scale-105 transition-transform"
+                                  src={productImages[item.colorIndex] || productImages[0]}
+                                  alt=""
+                                  className="h-10 w-10 rounded-lg object-cover border border-slate-200 shrink-0"
                                 />
-                                {isSelected && (
-                                  <div class="absolute inset-0 bg-rose-600/20 flex items-center justify-center">
-                                    <div class="h-4 w-4 rounded-full bg-rose-600 text-white flex items-center justify-center shadow">
-                                      <Check size={10} strokeWidth={3} />
-                                    </div>
-                                  </div>
+                              )}
+                              <div>
+                                <p className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
+                                  <span>{t.itemLabel || (lang === 'bn' ? 'আইটেম' : 'Item')} {idx + 1}:</span>
+                                  {productImages.length > 1 && (
+                                    <span className="text-rose-600 font-bold">
+                                      {t.colorItem} {item.colorIndex + 1}
+                                    </span>
+                                  )}
+                                </p>
+                                {item.size ? (
+                                  <p className="text-[10px] text-slate-500 font-medium">
+                                    {t.selectedSize} <strong className="text-rose-600 font-black">{item.size}</strong>
+                                  </p>
+                                ) : (
+                                  <p className="text-[10px] text-amber-600 font-bold">
+                                    {lang === 'bn' ? 'অনুগ্রহ করে নিচে সাইজ সিলেক্ট করুন' : 'Please select size below'}
+                                  </p>
                                 )}
                               </div>
-                              <div class="flex flex-col">
-                                <span class={`text-xs font-bold ${isSelected ? 'text-rose-700' : 'text-slate-700'}`}>
-                                  {t.colorItem} {idx + 1}
-                                </span>
-                                <span class={`text-[9px] ${isSelected ? 'text-rose-600 font-bold' : 'text-slate-400'}`}>
-                                  {isSelected ? (lang === 'bn' ? 'সিলেক্টেড ✓' : 'Selected ✓') : (lang === 'bn' ? 'ট্যাপ করুন' : 'Tap to select')}
-                                </span>
-                              </div>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
+                            </div>
 
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-xs font-bold text-slate-700">{t.quantity}</label>
-                      {selectedColors.length > 1 && (
-                        <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100">
-                          {lang === 'bn' ? `${selectedColors.length}টি কালার সিলেক্টেড (${selectedColors.length}টি পণ্য)` : `${selectedColors.length} colors selected (${selectedColors.length} items)`}
-                        </span>
-                      )}
+                            <div className="flex items-center gap-1.5">
+                              {/* Color changer for this specific item if multiple colors */}
+                              {productImages.length > 1 && (
+                                <select
+                                  value={item.colorIndex}
+                                  onChange={(e) => handleItemColorChange(item.id, Number(e.target.value))}
+                                  className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-bold text-slate-700 outline-none hover:border-slate-300 cursor-pointer"
+                                >
+                                  {productImages.map((_, cIdx) => (
+                                    <option key={cIdx} value={cIdx}>
+                                      {t.colorItem} {cIdx + 1}
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
+
+                              {/* Remove button if more than 1 item */}
+                              {orderItems.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveItem(item.id)}
+                                  className="rounded-lg border border-slate-200 p-1 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 transition-colors cursor-pointer"
+                                  title={t.removeItem || 'Remove item'}
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Size Selection Pills for this Item */}
+                          {allSizes.length > 0 && (
+                            <div>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                  {t.selectSizeLabel}:
+                                </span>
+                                {item.size && (
+                                  <span className="text-[10px] font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-100">
+                                    {item.size} ✓
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex flex-wrap gap-1.5">
+                                {allSizes.map((sz) => {
+                                  const qty = sizeStock[sz] !== undefined ? Number(sizeStock[sz]) : (hasConfiguredSizes ? 0 : product.stock)
+                                  const isAvail = qty > 0
+                                  const isSelected = item.size === sz
+
+                                  return (
+                                    <button
+                                      key={sz}
+                                      type="button"
+                                      disabled={!isAvail}
+                                      onClick={() => handleItemSizeChange(item.id, sz)}
+                                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1 cursor-pointer ${
+                                        isSelected
+                                          ? 'bg-rose-500 text-white shadow-md shadow-rose-200 ring-2 ring-rose-400'
+                                          : isAvail
+                                          ? 'bg-slate-50 text-slate-700 hover:bg-rose-50 hover:text-rose-600 border border-slate-200 shadow-2xs'
+                                          : 'bg-slate-100 text-slate-300 border border-slate-100 cursor-not-allowed line-through opacity-40'
+                                      }`}
+                                    >
+                                      <span>{sz}</span>
+                                      {!isAvail && <span className="text-[8px]">({t.sizeOutOfStock})</span>}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                    <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden max-w-[140px]">
-                      <button
-                        type="button"
-                        onClick={() => setQuantity(Math.max(Math.max(1, selectedColors.length), quantity - 1))}
-                        className="px-3.5 py-2 bg-slate-50 text-slate-600 font-bold hover:bg-slate-100 transition-colors"
-                      >
-                        -
-                      </button>
-                      <span className="flex-1 text-center text-xs font-bold">{quantity}</span>
-                      <button
-                        type="button"
-                        onClick={() => setQuantity(Math.min(currentSizeStock || product.stock, quantity + 1))}
-                        className="px-3.5 py-2 bg-slate-50 text-slate-600 font-bold hover:bg-slate-100 transition-colors"
-                      >
-                        +
-                      </button>
-                    </div>
+
+                    {/* Add Another Item Button */}
+                    <button
+                      type="button"
+                      onClick={() => handleAddItem(0)}
+                      className="flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-2xl border-2 border-dashed border-rose-300 bg-rose-50/40 hover:bg-rose-50 text-xs font-bold text-rose-600 transition-all hover:border-rose-400 active:scale-[0.99] shadow-2xs cursor-pointer"
+                    >
+                      <Plus size={15} className="text-rose-500 stroke-[2.5]" />
+                      <span>{t.addAnotherItemBtn || (lang === 'bn' ? '+ ভিন্ন সাইজ বা কালারের আরেকটি আইটেম যোগ করুন' : '+ Add Another Item with Different Size/Color')}</span>
+                    </button>
                   </div>
 
                   {/* Delivery Information Banner */}
@@ -1060,18 +1120,19 @@ ${confirmPrompt}`
                       <span>{t.productLabel}</span>
                       <span class="font-bold text-slate-800">{product.name}</span>
                     </div>
-                    {selectedSize && (
-                      <div class="flex justify-between text-slate-500">
-                        <span>{t.selectedSize}</span>
-                        <span class="font-bold text-rose-600">{selectedSize}</span>
-                      </div>
-                    )}
-                    {selectedColors.length > 0 && productImages.length > 1 && (
-                      <div class="flex justify-between text-slate-500">
-                        <span>{t.selectedColor}</span>
-                        <span class="font-bold text-rose-600">
-                          {selectedColors.map(idx => `${t.colorItem} ${idx + 1}`).join(', ')}
-                        </span>
+                    {orderItems && orderItems.length > 0 && (
+                      <div className="border-t border-b border-slate-200/60 py-1.5 space-y-1">
+                        {orderItems.map((item, idx) => (
+                          <div key={item.id || idx} className="flex justify-between text-slate-600 font-medium">
+                            <span>
+                              {orderItems.length > 1 ? `${t.itemLabel || (lang === 'bn' ? 'আইটেম' : 'Item')} ${idx + 1}` : (lang === 'bn' ? 'সিলেক্টেড আইটেম' : 'Selected Item')}
+                              {productImages.length > 1 ? ` (${t.colorItem || (lang === 'bn' ? 'কালার' : 'Color')} ${item.colorIndex + 1})` : ''}
+                            </span>
+                            <span className="font-bold text-rose-600">
+                              {item.size ? `${lang === 'bn' ? 'সাইজ' : 'Size'}: ${item.size}` : ''}
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     )}
                     <div class="flex justify-between text-slate-500">

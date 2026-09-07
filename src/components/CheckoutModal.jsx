@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { Check, ShoppingBag, X, MessageSquare, Tag, MapPin, Palette, Truck, AlertCircle } from 'lucide-react'
+import { Check, ShoppingBag, X, MessageSquare, Tag, MapPin, Palette, Truck, AlertCircle, Plus, Trash2, Layers } from 'lucide-react'
 import { supabase } from '../supabase'
 import { translations } from '../utils/translations'
 import confetti from 'canvas-confetti'
@@ -39,24 +39,88 @@ export default function CheckoutModal({ product, onClose, deliveryCharges, whats
     return []
   }, [product])
 
-  const [selectedColors, setSelectedColors] = useState(() => {
-    return productImages.length > 0 ? [0] : []
-  })
+  const initialDefaultSize = availableSizes.length > 0 ? availableSizes[0] : ''
 
-  const toggleColor = (idx) => {
-    setSelectedColors((prev) => {
-      let next
-      if (prev.includes(idx)) {
-        next = prev.filter((i) => i !== idx)
-      } else {
-        next = [...prev, idx].sort((a, b) => a - b)
+  // Per-item configuration: [{ id, colorIndex, size }]
+  const [orderItems, setOrderItems] = useState([
+    {
+      id: 1,
+      colorIndex: 0,
+      size: initialDefaultSize
+    }
+  ])
+
+  // Total quantity equals total items
+  const quantity = orderItems.length
+
+  const handleAddItem = (colorIdx = 0) => {
+    setOrderItems((prev) => [
+      ...prev,
+      {
+        id: Date.now() + Math.random(),
+        colorIndex: colorIdx,
+        size: initialDefaultSize
       }
-      // Each selected color counts as a product item; auto-update quantity
-      const targetCount = Math.max(1, next.length)
-      setQuantity(targetCount)
-      return next
-    })
+    ])
+    setError('')
   }
+
+  const handleRemoveItem = (itemId) => {
+    if (orderItems.length <= 1) return
+    setOrderItems((prev) => prev.filter((item) => item.id !== itemId))
+    setError('')
+  }
+
+  const handleItemSizeChange = (itemId, newSize) => {
+    setOrderItems((prev) =>
+      prev.map((item) => (item.id === itemId ? { ...item, size: newSize } : item))
+    )
+    setError('')
+  }
+
+  const handleItemColorChange = (itemId, newColorIdx) => {
+    setOrderItems((prev) =>
+      prev.map((item) => (item.id === itemId ? { ...item, colorIndex: newColorIdx } : item))
+    )
+    setError('')
+  }
+
+  const handleToggleColorFromPalette = (idx) => {
+    setOrderItems((prev) => {
+      const exists = prev.some((it) => it.colorIndex === idx)
+      if (exists) {
+        if (prev.length > 1) {
+          const lastIndex = prev.map((it) => it.colorIndex).lastIndexOf(idx)
+          return prev.filter((_, i) => i !== lastIndex)
+        }
+        return prev
+      } else {
+        return [
+          ...prev,
+          {
+            id: Date.now() + Math.random(),
+            colorIndex: idx,
+            size: initialDefaultSize
+          }
+        ]
+      }
+    })
+    setError('')
+  }
+
+  const selectedColorIndices = useMemo(() => {
+    return Array.from(new Set(orderItems.map((it) => it.colorIndex)))
+  }, [orderItems])
+
+  const sizeCounts = useMemo(() => {
+    const counts = {}
+    orderItems.forEach((it) => {
+      if (it.size) {
+        counts[it.size] = (counts[it.size] || 0) + 1
+      }
+    })
+    return counts
+  }, [orderItems])
 
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
@@ -64,10 +128,6 @@ export default function CheckoutModal({ product, onClose, deliveryCharges, whats
   const [upazila, setUpazila] = useState('')
   const [thana, setThana] = useState('')
   const [addressLine, setAddressLine] = useState('')
-  const [selectedSize, setSelectedSize] = useState(() => {
-    return availableSizes.length > 0 ? availableSizes[0] : ''
-  })
-  const [quantity, setQuantity] = useState(1)
   const [notes, setNotes] = useState('')
 
   // Bangladesh geographic dropdown options
@@ -125,7 +185,6 @@ export default function CheckoutModal({ product, onClose, deliveryCharges, whats
     const header = t.whatsappMessageHeader
     const orderDetailsLabel = t.whatsappMessageOrderDetails
     const productLabel = lang === 'bn' ? 'পণ্য' : 'Product'
-    const variantLabel = lang === 'bn' ? 'সাইজ/কালার' : 'Size/Color'
     const qtyLabel = lang === 'bn' ? 'পরিমাণ' : 'Quantity'
     const totalLabel = lang === 'bn' ? 'মোট বিল' : 'Total Bill'
     const shippingLabel = currentDeliveryCharge === 0
@@ -139,12 +198,13 @@ export default function CheckoutModal({ product, onClose, deliveryCharges, whats
     const notesLabel = lang === 'bn' ? 'নোট' : 'Notes'
     const confirmPrompt = t.whatsappMessageConfirmPrompt
 
-    const sizeText = selectedSize ? `Size: ${selectedSize}` : ''
-    const colorText = (selectedColors.length > 0 && productImages.length > 0)
-      ? `${t.colorItem}: ${selectedColors.map(idx => `${t.colorItem} ${idx + 1}`).join(', ')}`
-      : ''
-    const variantParts = [sizeText, colorText].filter(Boolean)
-    const variantText = variantParts.join(' | ')
+    // Itemized breakdown for WhatsApp
+    const itemsLines = orderItems.map((item, idx) => {
+      const colorLabel = productImages.length > 1 ? `${t.colorItem} ${item.colorIndex + 1}` : ''
+      const sizeLabel = item.size ? `Size: ${item.size}` : ''
+      const itemDesc = [colorLabel, sizeLabel].filter(Boolean).join(', ')
+      return `${idx + 1}. ${itemDesc || (lang === 'bn' ? '১টি' : '1 pc')}`
+    }).join('\n')
 
     const formattedAddress = formatFullAddress({
       addressLine,
@@ -159,7 +219,8 @@ export default function CheckoutModal({ product, onClose, deliveryCharges, whats
 ${orderDetailsLabel}
 -------------------------
 ${productLabel}: ${product.name}
-${variantText ? `${variantLabel}: ${variantText}\n` : ''}${qtyLabel}: ${quantity} ${lang === 'bn' ? 'টি' : 'pcs'}
+${itemsLines}
+${qtyLabel}: ${quantity} ${lang === 'bn' ? 'টি' : 'pcs'}
 ${totalLabel}: ৳${totalAmount} ${shippingLabel}
 
 ${customerInfoLabel}
@@ -195,17 +256,23 @@ ${confirmPrompt}`
       lang
     })
     
-    // Size Selection Validation
-    if (availableSizes.length > 0 && !selectedSize) {
-      return setError(lang === 'bn' ? 'অনুগ্রহ করে অর্ডার করার জন্য একটি সাইজ নির্বাচন করুন' : 'Please select an available size before ordering')
+    // Size Selection Validation for all items
+    if (availableSizes.length > 0) {
+      const missingSizeItem = orderItems.find((it) => !it.size)
+      if (missingSizeItem) {
+        return setError(t.pleaseSelectSize || 'Please select an available size for all items')
+      }
     }
 
-    if (selectedSize && sizeStock[selectedSize] !== undefined && sizeStock[selectedSize] < quantity) {
-      return setError(
-        lang === 'bn'
-          ? `সাইজ ${selectedSize}-এর জন্য পর্যাপ্ত স্টক নেই। অনুগ্রহ করে কম পরিমাণ নির্বাচন করুন।`
-          : `Insufficient stock for size ${selectedSize}. Please select a lower quantity.`
-      )
+    // Stock check per size
+    for (const [sz, reqCount] of Object.entries(sizeCounts)) {
+      if (sizeStock[sz] !== undefined && sizeStock[sz] < reqCount) {
+        return setError(
+          lang === 'bn'
+            ? `সাইজ ${sz}-এর পর্যাপ্ত স্টক নেই (মজুদ: ${sizeStock[sz]}টি, নির্বাচিত: ${reqCount}টি)।`
+            : `Insufficient stock for size ${sz} (Available: ${sizeStock[sz]}, Selected: ${reqCount}).`
+        )
+      }
     }
 
     if (product.stock < quantity) {
@@ -218,15 +285,13 @@ ${confirmPrompt}`
 
     setLoading(true)
 
-    const orderVariantParts = []
-    if (selectedSize) {
-      orderVariantParts.push(`Size: ${selectedSize}`)
-    }
-    if (selectedColors.length > 0 && productImages.length > 0) {
-      const colorLabels = selectedColors.map(idx => `${t.colorItem} ${idx + 1}`).join(', ')
-      orderVariantParts.push(`${t.colorItem}: ${colorLabels}`)
-    }
-    const orderVariant = orderVariantParts.length > 0 ? orderVariantParts.join(' | ') : null
+    // Formatted multi-item variant breakdown
+    const orderVariant = orderItems.map((item, idx) => {
+      const colorLabel = productImages.length > 1 ? `${t.colorItem} ${item.colorIndex + 1}` : ''
+      const sizeLabel = item.size ? `Size: ${item.size}` : ''
+      if (colorLabel && sizeLabel) return `${colorLabel} (${sizeLabel})`
+      return colorLabel || sizeLabel || `Item ${idx + 1}`
+    }).join(' + ')
 
     try {
       // 1. Save order to Supabase
@@ -265,8 +330,10 @@ ${confirmPrompt}`
 
       // 2. Reduce product stock and specific size stock
       const updatedSizeStock = { ...sizeStock }
-      if (selectedSize && updatedSizeStock[selectedSize] !== undefined) {
-        updatedSizeStock[selectedSize] = Math.max(0, updatedSizeStock[selectedSize] - quantity)
+      for (const [sz, reqCount] of Object.entries(sizeCounts)) {
+        if (updatedSizeStock[sz] !== undefined) {
+          updatedSizeStock[sz] = Math.max(0, updatedSizeStock[sz] - reqCount)
+        }
       }
       const updatedDescription = encodeProductDescription(cleanDescription, updatedSizeStock, isFreeDelivery, entryStock)
 
@@ -461,64 +528,7 @@ ${confirmPrompt}`
                   </div>
                 </div>
 
-                {/* Size Selection Section */}
-                {allSizes.length > 0 && (
-                  <div class="space-y-2 rounded-2xl bg-slate-50/80 p-3.5 border border-slate-100">
-                    <div class="flex items-center justify-between">
-                      <label class="block text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                        <Tag size={13} className="text-rose-500" />
-                        {t.selectSizeLabel}
-                      </label>
-                      {selectedSize && (
-                        <span class="text-xs font-extrabold text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-lg border border-rose-100">
-                          {t.selectedSize} <strong class="text-rose-700">{selectedSize}</strong>
-                        </span>
-                      )}
-                    </div>
-
-                    <div class="flex flex-wrap gap-2">
-                      {allSizes.map((sz) => {
-                        const qty = sizeStock[sz] !== undefined ? Number(sizeStock[sz]) : (hasConfiguredSizes ? 0 : product.stock)
-                        const isAvail = qty > 0
-                        const isSelected = selectedSize === sz
-
-                        return (
-                          <button
-                            key={sz}
-                            type="button"
-                            disabled={!isAvail}
-                            onClick={() => {
-                              if (isAvail) {
-                                setSelectedSize(sz)
-                                setError('')
-                              }
-                            }}
-                            class={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                              isSelected
-                                ? 'bg-rose-500 text-white shadow-md shadow-rose-200 ring-2 ring-rose-400'
-                                : isAvail
-                                ? 'bg-white text-slate-700 hover:bg-rose-50 hover:text-rose-600 border border-slate-200 shadow-sm'
-                                : 'bg-slate-100 text-slate-400 border border-slate-100 cursor-not-allowed line-through opacity-50'
-                            }`}
-                          >
-                            <span>{sz}</span>
-                            {!isAvail && (
-                              <span class="text-[9px] text-slate-400">({t.sizeOutOfStock})</span>
-                            )}
-                          </button>
-                        )
-                      })}
-                    </div>
-
-                    {availableSizes.length === 0 && (
-                      <p class="text-xs font-bold text-rose-500 bg-rose-50 p-2 rounded-xl">
-                        {lang === 'bn' ? 'এই পণ্যের সব সাইজ বর্তমানে স্টক আউট।' : 'All sizes for this product are currently out of stock.'}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {/* Color Selection Section */}
+                {/* Multi-Color Selection Quick Palette (if product has multiple images/colors) */}
                 {productImages.length > 1 && (
                   <div class="space-y-2.5 rounded-2xl bg-slate-50/80 p-3.5 border border-slate-100">
                     <div class="flex items-center justify-between flex-wrap gap-2">
@@ -531,24 +541,21 @@ ${confirmPrompt}`
                           {t.multiColorHint}
                         </span>
                       </div>
-                      {selectedColors.length > 0 && (
+                      {selectedColorIndices.length > 0 && (
                         <span class="text-xs font-black text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-lg border border-rose-100 flex items-center gap-1">
-                          <span>{t.colorsCountSelected.replace('{count}', selectedColors.length)}</span>
-                          <span class="text-[10px] text-slate-500 font-medium">
-                            ({selectedColors.map(idx => `${t.colorItem} ${idx + 1}`).join(', ')})
-                          </span>
+                          <span>{t.colorsCountSelected.replace('{count}', selectedColorIndices.length)}</span>
                         </span>
                       )}
                     </div>
 
                     <div class="flex flex-wrap gap-2 pt-1">
                       {productImages.map((img, idx) => {
-                        const isSelected = selectedColors.includes(idx)
+                        const isSelected = selectedColorIndices.includes(idx)
                         return (
                           <button
                             key={idx}
                             type="button"
-                            onClick={() => toggleColor(idx)}
+                            onClick={() => handleToggleColorFromPalette(idx)}
                             class={`group relative flex items-center gap-2 p-1.5 pr-3 rounded-xl border-2 transition-all text-left ${
                               isSelected
                                 ? 'border-rose-500 bg-rose-50/50 shadow-sm ring-1 ring-rose-300'
@@ -584,32 +591,140 @@ ${confirmPrompt}`
                   </div>
                 )}
 
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-bold text-slate-700">{t.quantity}</label>
-                    {selectedColors.length > 1 && (
-                      <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-100">
-                        {lang === 'bn' ? `${selectedColors.length}টি কালার সিলেক্টেড (${selectedColors.length}টি পণ্য)` : `${selectedColors.length} colors selected (${selectedColors.length} items)`}
-                      </span>
-                    )}
+                {/* Per-Item Size & Color Configuration Section */}
+                <div className="space-y-3 pt-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                      <Layers size={14} className="text-rose-500" />
+                      <span>{t.orderItemsTitle || 'অর্ডারের আইটেম ও সাইজ নির্বাচন করুন'}</span>
+                    </label>
+                    <span className="text-[11px] font-black text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-100">
+                      {lang === 'bn' ? `মোট ${orderItems.length}টি পণ্য` : `Total ${orderItems.length} items`}
+                    </span>
                   </div>
-                  <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden max-w-[140px]">
-                    <button
-                      type="button"
-                      onClick={() => setQuantity(Math.max(Math.max(1, selectedColors.length), quantity - 1))}
-                      className="px-3.5 py-2 bg-slate-50 text-slate-600 font-extrabold hover:bg-slate-100 transition-colors"
-                    >
-                      -
-                    </button>
-                    <span className="flex-1 text-center text-sm font-bold">{quantity}</span>
-                    <button
-                      type="button"
-                      onClick={() => setQuantity(Math.min(currentSizeStock || product.stock, quantity + 1))}
-                      className="px-3.5 py-2 bg-slate-50 text-slate-600 font-extrabold hover:bg-slate-100 transition-colors"
-                    >
-                      +
-                    </button>
+
+                  {/* Item Cards */}
+                  <div className="space-y-2.5">
+                    {orderItems.map((item, idx) => (
+                      <div
+                        key={item.id}
+                        className="rounded-2xl border-2 border-rose-100 bg-white p-3.5 shadow-xs transition-all hover:border-rose-200 space-y-2.5"
+                      >
+                        <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                          <div className="flex items-center gap-2.5">
+                            {productImages.length > 0 && (
+                              <img
+                                src={productImages[item.colorIndex] || productImages[0]}
+                                alt=""
+                                className="h-10 w-10 rounded-lg object-cover border border-slate-200 shrink-0"
+                              />
+                            )}
+                            <div>
+                              <p className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
+                                <span>{t.itemLabel || 'আইটেম'} {idx + 1}:</span>
+                                {productImages.length > 1 && (
+                                  <span className="text-rose-600 font-bold">
+                                    {t.colorItem} {item.colorIndex + 1}
+                                  </span>
+                                )}
+                              </p>
+                              {item.size ? (
+                                <p className="text-[10px] text-slate-500 font-medium">
+                                  {t.selectedSize} <strong className="text-rose-600 font-black">{item.size}</strong>
+                                </p>
+                              ) : (
+                                <p className="text-[10px] text-amber-600 font-bold">
+                                  {lang === 'bn' ? 'অনুগ্রহ করে নিচে সাইজ সিলেক্ট করুন' : 'Please select size below'}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            {/* Color changer for this specific item if multiple colors */}
+                            {productImages.length > 1 && (
+                              <select
+                                value={item.colorIndex}
+                                onChange={(e) => handleItemColorChange(item.id, Number(e.target.value))}
+                                className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-bold text-slate-700 outline-none hover:border-slate-300"
+                              >
+                                {productImages.map((_, cIdx) => (
+                                  <option key={cIdx} value={cIdx}>
+                                    {t.colorItem} {cIdx + 1}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+
+                            {/* Remove button if more than 1 item */}
+                            {orderItems.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveItem(item.id)}
+                                className="rounded-lg border border-slate-200 p-1 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                                title={t.removeItem || 'Remove item'}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Size Selection Pills for this Item */}
+                        {allSizes.length > 0 && (
+                          <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                {t.selectSizeLabel}:
+                              </span>
+                              {item.size && (
+                                <span className="text-[10px] font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-100">
+                                  {item.size} ✓
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex flex-wrap gap-1.5">
+                              {allSizes.map((sz) => {
+                                const qty = sizeStock[sz] !== undefined ? Number(sizeStock[sz]) : (hasConfiguredSizes ? 0 : product.stock)
+                                const isAvail = qty > 0
+                                const isSelected = item.size === sz
+
+                                return (
+                                  <button
+                                    key={sz}
+                                    type="button"
+                                    disabled={!isAvail}
+                                    onClick={() => handleItemSizeChange(item.id, sz)}
+                                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1 ${
+                                      isSelected
+                                        ? 'bg-rose-500 text-white shadow-md shadow-rose-200 ring-2 ring-rose-400'
+                                        : isAvail
+                                        ? 'bg-slate-50 text-slate-700 hover:bg-rose-50 hover:text-rose-600 border border-slate-200 shadow-2xs'
+                                        : 'bg-slate-100 text-slate-300 border border-slate-100 cursor-not-allowed line-through opacity-40'
+                                    }`}
+                                  >
+                                    <span>{sz}</span>
+                                    {!isAvail && <span className="text-[8px]">({t.sizeOutOfStock})</span>}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
+
+                  {/* Add Another Item Button */}
+                  <button
+                    type="button"
+                    onClick={() => handleAddItem(0)}
+                    className="flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-2xl border-2 border-dashed border-rose-300 bg-rose-50/40 hover:bg-rose-50 text-xs font-bold text-rose-600 transition-all hover:border-rose-400 active:scale-[0.99] shadow-2xs cursor-pointer"
+                  >
+                    <Plus size={15} className="text-rose-500 stroke-[2.5]" />
+                    <span>{t.addAnotherItemBtn || '+ ভিন্ন সাইজ বা কালারের আরেকটি আইটেম যোগ করুন'}</span>
+                  </button>
                 </div>
 
                 {/* Delivery Information Banner */}
@@ -714,18 +829,19 @@ ${confirmPrompt}`
                   <span>{t.productLabel}</span>
                   <span class="font-bold text-slate-800">{product.name}</span>
                 </div>
-                {selectedSize && (
-                  <div class="flex justify-between text-slate-500">
-                    <span>{t.selectedSize}</span>
-                    <span class="font-bold text-rose-600">{selectedSize}</span>
-                  </div>
-                )}
-                {selectedColors.length > 0 && productImages.length > 1 && (
-                  <div class="flex justify-between text-slate-500">
-                    <span>{t.selectedColor}</span>
-                    <span class="font-bold text-rose-600">
-                      {selectedColors.map(idx => `${t.colorItem} ${idx + 1}`).join(', ')}
-                    </span>
+                {orderItems && orderItems.length > 0 && (
+                  <div className="border-t border-b border-slate-200/60 py-1.5 space-y-1">
+                    {orderItems.map((item, idx) => (
+                      <div key={item.id || idx} className="flex justify-between text-slate-600 font-medium">
+                        <span>
+                          {orderItems.length > 1 ? `${t.itemLabel || (lang === 'bn' ? 'আইটেম' : 'Item')} ${idx + 1}` : (lang === 'bn' ? 'সিলেক্টেড আইটেম' : 'Selected Item')}
+                          {productImages.length > 1 ? ` (${t.colorItem || (lang === 'bn' ? 'কালার' : 'Color')} ${item.colorIndex + 1})` : ''}
+                        </span>
+                        <span className="font-bold text-rose-600">
+                          {item.size ? `${lang === 'bn' ? 'সাইজ' : 'Size'}: ${item.size}` : ''}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 )}
                 <div class="flex justify-between text-slate-500">
