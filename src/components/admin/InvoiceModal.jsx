@@ -1,8 +1,37 @@
-import React, { useEffect, useRef } from 'react'
-import { X, Printer, Download, CheckCircle2 } from 'lucide-react'
+import React, { useState, useEffect, useRef } from 'react'
+import { X, Printer, Download, CheckCircle2, Loader2, FileCode, Check, ExternalLink, AlertCircle } from 'lucide-react'
+
+// Robust dynamic loader for html2pdf.js
+const ensureHtml2Pdf = async () => {
+  if (typeof window !== 'undefined' && window.html2pdf) {
+    return window.html2pdf
+  }
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script')
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js'
+    script.onload = () => {
+      if (window.html2pdf) resolve(window.html2pdf)
+      else reject(new Error('html2pdf loaded but window.html2pdf is undefined'))
+    }
+    script.onerror = () => {
+      const fallbackScript = document.createElement('script')
+      fallbackScript.src = 'https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js'
+      fallbackScript.onload = () => {
+        if (window.html2pdf) resolve(window.html2pdf)
+        else reject(new Error('Fallback html2pdf failed'))
+      }
+      fallbackScript.onerror = () => reject(new Error('Failed to load html2pdf from all CDNs'))
+      document.head.appendChild(fallbackScript)
+    }
+    document.head.appendChild(script)
+  })
+}
 
 export default function InvoiceModal({ isOpen, order, settings, autoPrint = false, onClose }) {
   const printTriggeredRef = useRef(false)
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
+  const [pdfSuccess, setPdfSuccess] = useState(false)
+  const [pdfError, setPdfError] = useState(null)
 
   if (!isOpen || !order) return null
 
@@ -26,7 +55,6 @@ export default function InvoiceModal({ isOpen, order, settings, autoPrint = fals
   const quantity = Number(order.quantity || 1)
 
   // Delivery charge calculation
-  // Standard delivery in BD is 120 (or 60/0). If totalPrice > 120 and has delivery fee:
   let deliveryCharge = 120
   let productSubtotal = Math.max(0, totalPrice - deliveryCharge)
   if (totalPrice < 120 || productSubtotal === 0) {
@@ -41,11 +69,11 @@ export default function InvoiceModal({ isOpen, order, settings, autoPrint = fals
   // Generate CSS string for printing and visual preview
   const invoiceCss = `
     .inv-box {
-      width: 100%;
-      max-width: 780px;
+      width: 780px;
+      max-width: 100%;
       margin: 0 auto;
-      background: #ffffff;
-      color: #000000;
+      background: #ffffff !important;
+      color: #000000 !important;
       font-family: Arial, Helvetica, sans-serif;
       font-size: 11px;
       line-height: 1.35;
@@ -105,64 +133,112 @@ export default function InvoiceModal({ isOpen, order, settings, autoPrint = fals
         background: #ffffff !important;
         margin: 0 !important;
         padding: 0 !important;
-        overflow: visible !important;
       }
-      /* Hide all UI elements outside the printable invoice */
       body * {
         visibility: hidden;
       }
-      #printable-invoice-content,
-      #printable-invoice-content * {
+      #invoice-document-sheet,
+      #invoice-document-sheet * {
         visibility: visible;
       }
-      #printable-invoice-content {
+      #invoice-document-sheet {
         position: absolute !important;
         left: 0 !important;
         top: 0 !important;
         width: 100% !important;
         max-width: 100% !important;
         margin: 0 !important;
-        padding: 0 !important;
-        background: transparent !important;
-        display: block !important;
-      }
-      #invoice-modal-overlay {
-        position: static !important;
-        background: transparent !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        overflow: visible !important;
-        display: block !important;
-      }
-      #invoice-modal-card {
-        position: static !important;
-        max-height: none !important;
-        border: none !important;
         box-shadow: none !important;
-        background: transparent !important;
-        width: 100% !important;
-        max-width: 100% !important;
-        overflow: visible !important;
-        margin: 0 !important;
-        padding: 0 !important;
+        border: 2px solid #000000 !important;
       }
       .no-print {
         display: none !important;
       }
-      .inv-box {
-        box-shadow: none !important;
-        border: 2px solid #000000 !important;
-        margin: 0 auto !important;
-        max-width: 100% !important;
-        width: 100% !important;
-        page-break-inside: avoid !important;
-        break-inside: avoid !important;
-      }
     }
   `
 
-  // Native Browser Printing Handler: works across all PC & Mobile browsers without iframe blocking
-  const handlePrint = () => {
+  // Primary Action: Generate and download authentic PDF file
+  const handleDownloadPdf = async () => {
+    const element = document.getElementById('invoice-document-sheet')
+    if (!element) return
+
+    setIsGeneratingPdf(true)
+    setPdfError(null)
+
+    try {
+      const html2pdfLib = await ensureHtml2Pdf()
+      if (!html2pdfLib) throw new Error('html2pdf library could not be loaded')
+
+      const opt = {
+        margin: [4, 4, 4, 4],
+        filename: `Invoice-${invoiceNumber}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          letterRendering: true,
+          logging: false,
+          scrollY: 0
+        },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      }
+
+      await html2pdfLib().set(opt).from(element).save()
+      setPdfSuccess(true)
+      setTimeout(() => setPdfSuccess(false), 5000)
+    } catch (err) {
+      console.error('PDF generation error:', err)
+      setPdfError('PDF library download was blocked by browser. Opening print preview instead...')
+      handlePrintInNewWindow()
+    } finally {
+      setIsGeneratingPdf(false)
+    }
+  }
+
+  // Standalone Print Window: bypasses all dashboard CSS and overflow issues
+  const handlePrintInNewWindow = () => {
+    const content = document.getElementById('invoice-document-sheet')
+    if (!content) {
+      try { window.print() } catch (e) {}
+      return
+    }
+
+    try {
+      const printWindow = window.open('', '_blank', 'width=850,height=1050')
+      if (printWindow) {
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>Invoice-${invoiceNumber}</title>
+              <meta charset="utf-8" />
+              <style>
+                @page { size: A4 portrait; margin: 6mm 8mm; }
+                * { box-sizing: border-box; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                body { background: #fff; padding: 8px; display: flex; justify-content: center; }
+                ${invoiceCss}
+              </style>
+            </head>
+            <body>
+              ${content.outerHTML}
+              <script>
+                window.onload = function() {
+                  setTimeout(function() {
+                    window.focus();
+                    window.print();
+                  }, 350);
+                };
+              </script>
+            </body>
+          </html>
+        `)
+        printWindow.document.close()
+        return
+      }
+    } catch (e) {
+      console.warn('Popup blocked, using in-window print:', e)
+    }
+
     try {
       window.print()
     } catch (err) {
@@ -170,25 +246,21 @@ export default function InvoiceModal({ isOpen, order, settings, autoPrint = fals
     }
   }
 
-  // Auto-print upon confirmation
+  // Auto-generate & download PDF upon confirmation
   useEffect(() => {
     if (autoPrint && !printTriggeredRef.current) {
       printTriggeredRef.current = true
       const timer = setTimeout(() => {
-        try {
-          window.print()
-        } catch (e) {
-          console.warn('Auto print was blocked by browser policy:', e)
-        }
-      }, 350)
+        handleDownloadPdf()
+      }, 400)
       return () => clearTimeout(timer)
     }
   }, [autoPrint])
 
   // Download raw HTML copy as backup
   const handleDownloadHtml = () => {
-    const printArea = document.getElementById('printable-invoice-content')
-    if (!printArea) return
+    const content = document.getElementById('invoice-document-sheet')
+    if (!content) return
 
     const htmlContent = `<!DOCTYPE html>
 <html>
@@ -196,13 +268,13 @@ export default function InvoiceModal({ isOpen, order, settings, autoPrint = fals
   <title>Invoice-${invoiceNumber}</title>
   <meta charset="utf-8" />
   <style>
-    @page { size: A4 portrait; margin: 10mm; }
+    @page { size: A4 portrait; margin: 8mm; }
     * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     ${invoiceCss}
   </style>
 </head>
-<body>
-  ${printArea.innerHTML}
+<body style="display: flex; justify-content: center; padding: 10px; background: #fff;">
+  ${content.outerHTML}
 </body>
 </html>`
 
@@ -230,14 +302,14 @@ export default function InvoiceModal({ isOpen, order, settings, autoPrint = fals
       >
         
         {/* Modal Toolbar Header */}
-        <div className="no-print flex items-center justify-between border-b border-slate-200 bg-white px-5 py-3.5 shrink-0">
+        <div className="no-print flex items-center justify-between border-b border-slate-200 bg-white px-5 py-3.5 shrink-0 flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-50 text-rose-500 font-bold">
               <CheckCircle2 size={16} />
             </span>
             <div>
               <h3 className="text-xs font-bold text-slate-800">
-                Order Confirmed — Official Invoice
+                Official PDF Invoice
               </h3>
               <p className="text-[10px] text-slate-400">
                 Invoice #{invoiceNumber} &bull; Customer: {order.customer_name}
@@ -246,29 +318,53 @@ export default function InvoiceModal({ isOpen, order, settings, autoPrint = fals
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Primary Action: Download PDF */}
             <button
               type="button"
-              onClick={handlePrint}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-rose-500 hover:bg-rose-600 px-4 py-2 text-xs font-bold text-white shadow-md shadow-rose-100 transition-colors"
+              disabled={isGeneratingPdf}
+              onClick={handleDownloadPdf}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 active:scale-95 px-4 py-2 text-xs font-bold text-white shadow-md shadow-rose-200 transition-all cursor-pointer disabled:opacity-60"
             >
-              <Printer size={14} />
-              <span>Print / Save as PDF</span>
+              {isGeneratingPdf ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" />
+                  <span>Generating PDF...</span>
+                </>
+              ) : (
+                <>
+                  <Download size={14} />
+                  <span>Download PDF Invoice</span>
+                </>
+              )}
             </button>
 
+            {/* Print / Save as PDF */}
+            <button
+              type="button"
+              onClick={handlePrintInNewWindow}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 transition-colors shadow-xs cursor-pointer"
+              title="Print or Save via Browser Dialog"
+            >
+              <Printer size={13} />
+              <span className="hidden sm:inline">Print</span>
+            </button>
+
+            {/* HTML Backup */}
             <button
               type="button"
               onClick={handleDownloadHtml}
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 transition-colors"
-              title="Download HTML copy"
+              className="hidden md:inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-2.5 py-2 text-xs font-bold text-slate-600 transition-colors cursor-pointer"
+              title="Download HTML backup"
             >
-              <Download size={13} />
-              <span>Download HTML</span>
+              <FileCode size={13} />
+              <span>HTML</span>
             </button>
 
+            {/* Close Button */}
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-slate-200 p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors ml-1"
+              className="rounded-xl border border-slate-200 p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors ml-1 cursor-pointer"
               title="Close"
             >
               <X size={16} />
@@ -276,11 +372,33 @@ export default function InvoiceModal({ isOpen, order, settings, autoPrint = fals
           </div>
         </div>
 
+        {/* Dynamic Notification Banners */}
+        <div className="no-print px-5 pt-3">
+          {isGeneratingPdf && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 px-3.5 py-2 text-xs font-bold text-blue-700 flex items-center gap-2 shadow-xs animate-pulse">
+              <Loader2 size={15} className="animate-spin text-blue-600 shrink-0" />
+              <span>Generating official PDF copy (Invoice-{invoiceNumber}.pdf)...</span>
+            </div>
+          )}
+          {pdfSuccess && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-xs font-bold text-emerald-700 flex items-center gap-2 shadow-xs">
+              <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+              <span>Official PDF Invoice downloaded successfully! Saved to your Downloads folder.</span>
+            </div>
+          )}
+          {pdfError && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2 text-xs font-bold text-amber-800 flex items-center gap-2 shadow-xs">
+              <AlertCircle size={15} className="text-amber-600 shrink-0" />
+              <span>{pdfError}</span>
+            </div>
+          )}
+        </div>
+
         {/* Invoice Preview Canvas */}
         <div className="p-4 sm:p-6 overflow-y-auto flex-1 flex justify-center bg-slate-200/60">
           <div id="printable-invoice-content" className="w-full flex justify-center">
             
-            <div className="inv-box shadow-md">
+            <div id="invoice-document-sheet" className="inv-box shadow-md">
               {/* Top Header Grid */}
               <table className="inv-table">
                 <tbody>

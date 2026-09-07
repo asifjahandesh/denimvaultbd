@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import { supabase } from '../../supabase'
-import { Search, Filter, Phone, MapPin, Calendar, Clock, ShoppingCart, User, AlertCircle, Trash2, FileText, Printer } from 'lucide-react'
+import { Search, Filter, Phone, MapPin, Calendar, Clock, ShoppingCart, User, AlertCircle, Trash2, FileText, Printer, Check } from 'lucide-react'
 import InvoiceModal from '../../components/admin/InvoiceModal'
 
 export default function OrderManager({ orders, settings, onOrderUpdate }) {
@@ -219,6 +219,20 @@ export default function OrderManager({ orders, settings, onOrderUpdate }) {
                       </td>
                       <td class="py-3.5 pr-4 text-right" onClick={(e) => e.stopPropagation()}>
                         <div class="flex items-center justify-end gap-1.5">
+                          {order.status === 'pending' && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleStatusChange(order, 'confirmed')
+                              }}
+                              className="inline-flex items-center gap-1 rounded-xl bg-emerald-500 hover:bg-emerald-600 px-2.5 py-1 text-[10px] font-bold text-white shadow-xs transition-all hover:shadow-emerald-200"
+                              title="Confirm Order & Generate PDF Invoice"
+                            >
+                              <Check size={11} strokeWidth={3} />
+                              <span>Confirm</span>
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={(e) => {
@@ -226,8 +240,8 @@ export default function OrderManager({ orders, settings, onOrderUpdate }) {
                               setInvoiceOrder(order)
                               setAutoPrintInvoice(false)
                             }}
-                            class="rounded-xl border border-slate-200 bg-white p-1.5 text-slate-500 hover:border-slate-300 hover:bg-slate-50 hover:text-rose-600 transition-colors"
-                            title="View / Print Official Invoice"
+                            class="rounded-xl border border-blue-200 bg-blue-50/70 p-1.5 text-blue-600 hover:bg-blue-100 transition-colors"
+                            title="View / Download Official PDF Invoice"
                           >
                             <FileText size={13} />
                           </button>
@@ -297,17 +311,29 @@ export default function OrderManager({ orders, settings, onOrderUpdate }) {
                 </select>
               </div>
 
-              {/* Print Official Invoice Button */}
+              {/* Quick Confirm & PDF Button for Pending orders */}
+              {selectedOrder.status === 'pending' && (
+                <button
+                  type="button"
+                  onClick={() => handleStatusChange(selectedOrder, 'confirmed')}
+                  className="flex items-center justify-center gap-2 w-full rounded-xl bg-emerald-500 hover:bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white transition-all shadow-md shadow-emerald-100 cursor-pointer"
+                >
+                  <Check size={14} strokeWidth={3} />
+                  <span>Confirm Order & Generate PDF Invoice</span>
+                </button>
+              )}
+
+              {/* View & Download Official PDF Invoice Button */}
               <button
                 type="button"
                 onClick={() => {
                   setInvoiceOrder(selectedOrder)
                   setAutoPrintInvoice(false)
                 }}
-                className="flex items-center justify-center gap-2 w-full rounded-xl border border-blue-200 bg-blue-50/80 hover:bg-blue-100/80 px-4 py-2 text-xs font-bold text-blue-700 transition-colors shadow-xs"
+                className="flex items-center justify-center gap-2 w-full rounded-xl border border-blue-200 bg-blue-50/80 hover:bg-blue-100/80 px-4 py-2 text-xs font-bold text-blue-700 transition-colors shadow-xs cursor-pointer"
               >
-                <Printer size={14} />
-                <span>View & Print Official Invoice</span>
+                <FileText size={14} />
+                <span>View & Download Official PDF Invoice</span>
               </button>
 
               {/* Customer Details */}
