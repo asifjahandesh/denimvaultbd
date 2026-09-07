@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../supabase'
-import { X, Printer, Download, CheckCircle2, MessageSquare, Image as ImageIcon } from 'lucide-react'
+import { X, Printer, Download, CheckCircle2, MessageSquare, Image as ImageIcon, Copy } from 'lucide-react'
 import { generateInvoiceImage, downloadInvoiceImage } from '../../utils/generateInvoiceImage'
 
 export default function InvoiceModal({ isOpen, order, settings, product = null, products = [], autoPrint = false, onClose }) {
@@ -9,6 +9,7 @@ export default function InvoiceModal({ isOpen, order, settings, product = null, 
   const [invoiceData, setInvoiceData] = useState(null)
   const [generating, setGenerating] = useState(false)
   const [imageDownloaded, setImageDownloaded] = useState(false)
+  const [copyImageSuccess, setCopyImageSuccess] = useState(false)
 
   // Generate canvas image whenever order or settings or product changes
   useEffect(() => {
@@ -148,17 +149,65 @@ export default function InvoiceModal({ isOpen, order, settings, product = null, 
     window.print()
   }
 
-  // Direct WhatsApp link to customer
-  const getWhatsappLink = () => {
+  // Helper to copy invoice image to clipboard (PC / Desktop)
+  const handleCopyImage = async () => {
+    if (!invoiceData?.dataUrl) return
+    try {
+      if (navigator.clipboard && window.ClipboardItem) {
+        const response = await fetch(invoiceData.dataUrl)
+        const blob = await response.blob()
+        await navigator.clipboard.write([
+          new ClipboardItem({ 'image/png': blob })
+        ])
+        setCopyImageSuccess(true)
+        setTimeout(() => setCopyImageSuccess(false), 8000)
+        return true
+      }
+    } catch (e) {
+      console.warn('Clipboard write failed:', e)
+    }
+    return false
+  }
+
+  // Direct WhatsApp Share Handler with Image Support
+  const handleShareWhatsapp = async () => {
     const rawPhone = (order.phone || '').replace(/\D/g, '')
     let formattedPhone = rawPhone
     if (formattedPhone.startsWith('0')) formattedPhone = '88' + formattedPhone
     else if (!formattedPhone.startsWith('88')) formattedPhone = '88' + formattedPhone
 
-    const text = encodeURIComponent(
-      `Hello ${order.customer_name},\nYour order for "${order.product_name}" has been confirmed by Denim Vault BD.\nInvoice #${invoiceData?.invoiceNumber || ''}\nTotal: BDT ${order.total_price}\nPayment: Cash on Delivery.\nThank you for shopping with us!`
-    )
-    return `https://wa.me/${formattedPhone}?text=${text}`
+    const messageText = `Hello ${order.customer_name},\nYour order for "${order.product_name}" has been confirmed by Denim Vault BD.\nInvoice #${invoiceData?.invoiceNumber || ''}\nTotal: BDT ${order.total_price}\nPayment: Cash on Delivery.\nThank you for shopping with us!`
+
+    // 1. Mobile Web Share API: Shares actual image file + pre-filled message directly into WhatsApp app
+    if (invoiceData?.dataUrl && navigator.canShare) {
+      try {
+        const response = await fetch(invoiceData.dataUrl)
+        const blob = await response.blob()
+        const file = new File([blob], invoiceData.filename || 'Invoice.png', { type: 'image/png' })
+
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            title: `Invoice #${invoiceData.invoiceNumber || ''}`,
+            text: messageText,
+            files: [file]
+          })
+          return
+        }
+      } catch (shareErr) {
+        if (shareErr.name === 'AbortError') {
+          return // User cancelled the share sheet
+        }
+        console.warn('Web Share failed, using clipboard & web fallback:', shareErr)
+      }
+    }
+
+    // 2. PC / Desktop: Copy image to system clipboard so user can press Ctrl+V in WhatsApp Web
+    await handleCopyImage()
+
+    // 3. Open WhatsApp chat with pre-filled message
+    const textEncoded = encodeURIComponent(messageText)
+    const waUrl = `https://wa.me/${formattedPhone}?text=${textEncoded}`
+    window.open(waUrl, '_blank')
   }
 
   return (
@@ -181,28 +230,38 @@ export default function InvoiceModal({ isOpen, order, settings, product = null, 
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* WhatsApp Share Button with Image Support */}
+            <button
+              type="button"
+              onClick={handleShareWhatsapp}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 active:scale-95 px-3 py-2 text-xs font-bold text-emerald-700 transition-all shadow-xs cursor-pointer"
+              title="Share Invoice Image & message to WhatsApp"
+            >
+              <MessageSquare size={14} />
+              <span>WhatsApp Invoice</span>
+            </button>
+
+            {/* Copy Image Button */}
+            <button
+              type="button"
+              onClick={handleCopyImage}
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-95 px-3 py-2 text-xs font-bold text-slate-700 transition-all shadow-xs cursor-pointer"
+              title="Copy Invoice Image to Clipboard (for Ctrl+V in WhatsApp Web)"
+            >
+              <Copy size={13} />
+              <span>Copy Image</span>
+            </button>
+
             {/* Primary Download Image Button */}
             <button
               type="button"
               onClick={handleDownload}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 active:scale-95 px-4 py-2 text-xs font-bold text-white shadow-md shadow-rose-200 transition-all cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 active:scale-95 px-3.5 py-2 text-xs font-bold text-white shadow-md shadow-rose-200 transition-all cursor-pointer"
             >
               <Download size={14} />
-              <span>Download Invoice Image</span>
+              <span>Download</span>
             </button>
-
-            {/* WhatsApp Share Button */}
-            <a
-              href={getWhatsappLink()}
-              target="_blank"
-              rel="noreferrer"
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 px-3 py-2 text-xs font-bold text-emerald-700 transition-colors shadow-xs"
-              title="Message customer on WhatsApp"
-            >
-              <MessageSquare size={13} />
-              <span>WhatsApp</span>
-            </a>
 
             {/* Print Button */}
             <button
@@ -226,6 +285,23 @@ export default function InvoiceModal({ isOpen, order, settings, product = null, 
             </button>
           </div>
         </div>
+
+        {/* Copy Image Notice Banner */}
+        {copyImageSuccess && (
+          <div className="bg-emerald-50 border-b border-emerald-200 px-5 py-2.5 text-xs font-bold text-emerald-800 flex items-center justify-between shadow-xs shrink-0">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+              <span>📋 Invoice image copied to clipboard! In WhatsApp Web, simply press <span className="bg-emerald-200/70 px-1.5 py-0.5 rounded text-emerald-950 font-mono text-[11px]">Ctrl + V</span> to attach and send.</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCopyImageSuccess(false)}
+              className="text-emerald-700 hover:text-emerald-900 text-[11px] font-bold underline ml-2 cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {/* Download Success Banner */}
         {imageDownloaded && (
